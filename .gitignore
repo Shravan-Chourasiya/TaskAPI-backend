@@ -1,0 +1,9 @@
+.env*
+node_modules/
+*agent*.md
+todo.txt
+routes.md
+errors.md
+statuscodes.md
+session*.md
+dbresetScript.ts
