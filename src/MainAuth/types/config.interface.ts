@@ -15,4 +15,5 @@ export interface Config {
 	OTP_SALT: string;
 	API_BASE_URL: string;
 	ALLOWED_ORIGINS: string[];
+	
 }

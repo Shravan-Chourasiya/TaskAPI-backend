@@ -5,13 +5,11 @@
   "main": "server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "nodemon server.js",
+    "dev": "tsx watch server.ts",
     "start": "node dist/server.js",
-    "clear": "node dbresetScript.js",
+    "clear": "tsx dbresetScript.ts",
     "typecheck": "tsc --noEmit",
-    "build": "tsc",
-    "devts": "tsx watch server.ts",
-    "clearTs": "tsx dbresetScript.ts"
+    "build": "tsc"
   },
   "keywords": [],
   "author": "",
@@ -32,7 +30,8 @@
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.2.1",
     "morgan": "^1.10.1",
-    "nodemailer": "^8.0.5"
+    "nodemailer": "^8.0.5",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.10",

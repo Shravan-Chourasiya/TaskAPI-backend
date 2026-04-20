@@ -5,10 +5,11 @@ import { sessionModel } from "../models/session.model.js";
 import { config } from "../configs/configs.js";
 import { generateOTP, getOtpHTML } from "../utils/email.utils.js";
 import { sendVerificationEmail } from "../services/email.service.js";
-import { OtpModel as otpModel } from "../models/otp.model.js";
+import { OtpModel, OtpModel as otpModel } from "../models/otp.model.js";
 import type { NextFunction, Request, Response } from "express";
 import {
 	AccountRecoveryHandler,
+	emailPurposeMapper,
 	EmailUpdationHandler,
 	EmailVerificationHandler,
 	ResetPasswordHandler,
@@ -51,10 +52,6 @@ export async function registerController(
 			"Email Verification on TaskAPI",
 			html,
 		);
-
-		// const otpHash = crypto
-		// 	.pbkdf2Sync(otp, config.OTP_SALT as string, 10000, 64, `sha512`)
-		// 	.toString(`hex`);
 
 		const otpHash = await bcrypt.hash(otp, 12);
 		const otpObject = await otpModel.create({
@@ -193,9 +190,7 @@ export async function tokenRotationController(
 			expiresIn: "7d",
 		});
 		const newRfTokenHash = await bcrypt.hash(newRfToken, 12);
-		session.refreshToken = newRfTokenHash;
-		session.isRevoked = false;
-		await session.save();
+		await session.updateOne({ refreshToken: newRfTokenHash, isRevoked: false });
 
 		res.cookie("rfToken", newRfToken, config.COOKIE_CONF_RT);
 		res.cookie("acToken", acToken, config.COOKIE_CONF_AT);
@@ -238,8 +233,7 @@ export async function logoutController(
 				message: "Refresh token is invalid or revoked",
 			});
 		}
-		session.isRevoked = true;
-		await session.save();
+		await session.updateOne({ isRevoked: true });
 		res.clearCookie("rfToken");
 		res.clearCookie("acToken");
 		res.status(200).json({
@@ -271,7 +265,7 @@ export async function updateDetailsController(
 		}
 		switch (fieldToUpdate) {
 			case "username":
-				user.username = newValue as z.infer<typeof usernameSchema>;
+				await user.updateOne({ username: newValue as z.infer<typeof usernameSchema> });
 				break;
 			case "email":
 				const otp = generateOTP();
@@ -304,15 +298,14 @@ export async function updateDetailsController(
 				);
 
 				const otpHash2 = await bcrypt.hash(otp2, 12);
-				const newPasswordHash = await bcrypt.hash(newValue, 12); // hash immediately
-
+				const newPasswordHash = await bcrypt.hash(newValue, 12); 
 				const otpObject2 = await otpModel.create({
 					userId: user._id,
 					otp: otpHash2,
 					email: user.email,
 					purpose: "resetPassword",
 					isTemp: true,
-					fieldToUpdateNewValue: newPasswordHash, // store hashed password
+					fieldToUpdateNewValue: newPasswordHash
 				});
 				break;
 			default:
@@ -350,8 +343,7 @@ export async function deleteAccountController(
 				.status(400)
 				.json({ message: "Account Already Scheduled to be Deleted!" });
 		}
-		user.isDeleted = true;
-		await user.save();
+		await user.updateOne({ isDeleted: true });
 		return res.status(200).json({
 			message:
 				"Account Scheduled to be Deleted! If you want to recover it,Complete Account Recovery Procedure within 30 days and recover your account!",
@@ -462,6 +454,52 @@ export async function verificationController(
 				.status(403)
 				.json({ message: "Invalid Access for Verification API!" });
 		}
+	} catch (error) {
+		next(error);
+	}
+}
+
+export async function resendOtpController(req:Request,res:Response,next:NextFunction) {
+	try {
+		const { email } = req.body;
+		const user = await userModel.findOne({ email });
+		if (!user) {
+			return res.status(404).json({ message: "User Not Found!" });
+		}
+		const existingOtp = await otpModel.findOne({
+			email,
+			isUsed: false,
+			expiryTime: { $gt: new Date() },
+		}).sort({ createdAt: -1 });
+
+		if (!existingOtp) {
+			return res.status(404).json({ message: "No valid OTP request found. Please initiate a new verification process." });
+		}
+		
+		const purpose = existingOtp.purpose;
+		
+		const emailSubject = emailPurposeMapper(purpose);
+
+		const otp =  generateOTP();
+		const html = getOtpHTML(otp, "verifyEmailOR");
+
+		await sendVerificationEmail(
+			config.GMAIL_USER_EMAIL,
+			user.email,
+			emailSubject,
+			html,
+		);
+
+		const otpHash = await bcrypt.hash(otp, 12);
+
+		await existingOtp.updateOne({ isUsed: true });
+
+		const otpObject = await OtpModel.create({
+			userId: user._id,
+			otp: otpHash,
+			email: user.email,
+			purpose,
+		});
 	} catch (error) {
 		next(error);
 	}

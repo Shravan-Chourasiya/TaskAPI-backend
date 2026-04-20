@@ -9,6 +9,7 @@ import { sendVerificationEmail } from "../services/email.service.js";
 import type { UserModel } from "../types/dbModel.interface.js";
 import type { emailSchema, passwordSchema } from "../libs/auth.ZodSchema.js";
 import * as z from "zod";
+import e from "express";
 
 export const EmailVerificationHandler =
 	(otp: string) => async (req: Request, res: Response, next: NextFunction) => {
@@ -38,10 +39,8 @@ export const EmailVerificationHandler =
 			if (!user) {
 				return res.status(404).json({ message: "User Not Found!" });
 			}
-			user.isVerified = true;
-			await user.save();
-			otpRecord.isUsed = true;
-			await otpRecord.save();
+			await user.updateOne({ isVerified: true });
+			await otpRecord.updateOne({ isUsed: true });
 			res.clearCookie("tempToken");
 			await OtpModel.deleteOne({ _id: otpRecord._id });
 			return res.status(200).json({ message: "Email Verified Successfully!" });
@@ -79,10 +78,9 @@ export const ResetPasswordHandler =
 			if (!user) {
 				return res.status(404).json({ message: "User Not Found!" });
 			}
-			user.password = otpRecord.fieldToUpdateNewValue as z.infer<typeof passwordSchema>;
+			await user.updateOne({ password: otpRecord.fieldToUpdateNewValue as z.infer<typeof passwordSchema> });
 			await user.save();
-			otpRecord.isUsed = true;
-			await otpRecord.save();
+			await otpRecord.updateOne({ isUsed: true });
 			await OtpModel.deleteOne({ _id: otpRecord._id });
 			return res.status(200).json({
 				message: "Password Reset Successfully!",
@@ -122,10 +120,8 @@ export const EmailUpdationHandler =
 			if (!user) {
 				return res.status(404).json({ message: "User Not Found!" });
 			}
-			user.email= otpRecord.fieldToUpdateNewValue as z.infer<typeof emailSchema>;
-			await user.save();
-			otpRecord.isUsed = true;
-			await otpRecord.save();
+			await user.updateOne({ email: otpRecord.fieldToUpdateNewValue as z.infer<typeof emailSchema> });
+			await otpRecord.updateOne({ isUsed: true });
 			await OtpModel.deleteOne({ _id: otpRecord._id });
 			return res.status(200).json({
 				message: "Email Updated Successfully!",
@@ -168,9 +164,8 @@ export const AccountRecoveryHandler =
 			if (!user) {
 				return res.status(404).json({ message: "User Not Found!" });
 			}
-			await user.save();
-			otpRecord.isUsed = true;
-			await otpRecord.save();
+			await user.updateOne({ isDeleted: false });
+			await otpRecord.updateOne({ isUsed: true });
 			await OtpModel.deleteOne({ _id: otpRecord._id });
 			return res.status(200).json({
 				message: "Account Recovered Successfully!",
@@ -181,26 +176,17 @@ export const AccountRecoveryHandler =
 		}
 	};
 
-export const OtpResendFunction = async (
-	user: UserModel,
-	purpose: string,
-	emailSubject: string,
-) => {
-	const otp = generateOTP();
-	const html = getOtpHTML(otp, "verifyEmailOR");
-
-	await sendVerificationEmail(
-		config.GMAIL_USER_EMAIL as string,
-		user.email,
-		emailSubject,
-		html,
-	);
-
-	const otpHash = await bcrypt.hash(otp, 12);
-	const otpObject = await OtpModel.create({
-		userId: user._id,
-		otp: otpHash,
-		email: user.email,
-		purpose,
-	});
+export const emailPurposeMapper = (purpose: string): string => {
+	switch(purpose) {
+		case "verifyEmailOR":
+			return "Email Verification for New Registration on TaskAPI";
+		case "verifyEmailUP":
+			return "Email Verification for Email Update on TaskAPI";
+		case "resetPassword":
+			return "Password Reset Verification for Your TaskAPI Account";
+		case "account_recovery":
+			return "Account Recovery Verification for Your TaskAPI Account";
+		default:
+			return "Email Verification";
+	}
 };

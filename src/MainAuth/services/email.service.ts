@@ -1,6 +1,5 @@
 import nodemailer from "nodemailer";
 import { config } from "../configs/configs.js";
-import { error } from "console";
 import type { NodemailerError } from "../types/nodemailer.interface.js";
 
 const transporter = nodemailer.createTransport({
@@ -13,6 +12,7 @@ const transporter = nodemailer.createTransport({
 		refreshToken: config.GMAIL_REFRESH_TOKEN,
 	},
 });
+
 
 export async function sendVerificationEmail(
 	from: string,
@@ -27,7 +27,7 @@ export async function sendVerificationEmail(
 			subject: subject,
 			html: html,
 		});
-		
+		console.log("Email sent successfully:", info.messageId);
 	} catch (err) {
 		const error = err as NodemailerError;
 

@@ -33,7 +33,7 @@ const sessionSchema = new mongoose.Schema({
 })
 
 sessionSchema.index({ userId: 1 }); // speeds up queries by userId
-sessionSchema.index({ refreshToken: 1 }); // speeds up queries by refreshToken
+// sessionSchema.index({ refreshToken: 1 }); // speeds up queries by refreshToken
 sessionSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 }); // TTL cleanup
 
 export const sessionModel = mongoose.model<SessionModel>("Sessions", sessionSchema)

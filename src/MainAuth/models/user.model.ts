@@ -30,8 +30,6 @@ const userSchema = new mongoose.Schema({
 	},
 });
 
-userSchema.index({ _id: 1 });
-
 userSchema.index(
 	{ expiresAt: 1 },
 	{

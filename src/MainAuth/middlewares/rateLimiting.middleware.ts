@@ -22,8 +22,7 @@ export const otpRateLimiter = rateLimit({
 	max: 5,
 	message: "Too many OTP attempts. Try again after 10 minutes.",
 	keyGenerator: (req) => {
-		// Email/userId se limit karo (if available in request)
 		const email = req.body.email || req.cookies.tempToken;
-		return email || req.ip; // Fallback to IP
+		return email || ipKeyGenerator(req.ip || ""); // Fallback to IP
 	},
 });

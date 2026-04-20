@@ -12,7 +12,6 @@ import {
 	registerSchema,
 } from "../libs/auth.ZodSchema.js";
 
-
 const router = express.Router();
 
 router.post(
@@ -66,6 +65,13 @@ router.post(
 	"/token/refresh",
 	refreshTokenHandler,
 	authControllers.tokenRotationController,
+);
+
+router.post(
+	"/resend-otp",
+	ZodValidatorMiddleware(otpSchema),
+	otpRateLimiter,
+	authControllers.resendOtpController
 );
 
 export { router as authRouter };
