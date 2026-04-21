@@ -16,6 +16,7 @@ export const config:Config = {
     OTP_SALT:getEnvVar("OTP_SALT"),
     COOKIE_CONF_AT:getCookieVar("COOKIE_CONF_AT"),
     COOKIE_CONF_RT:getCookieVar("COOKIE_CONF_RT"),
+    COOKIE_CONF_TT:getCookieVar("COOKIE_CONF_TT"),
     API_BASE_URL:getEnvVar("API_BASE_URL"),
     ALLOWED_ORIGINS:getEnvVarArr("ALLOWED_ORIGINS")
 }

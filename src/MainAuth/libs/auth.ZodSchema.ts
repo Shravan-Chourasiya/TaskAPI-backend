@@ -15,7 +15,7 @@ export const loginDeleteRecoverAccSchema = z.object({
 });
 
 export const otpSchema = z.object({
-	otp: z.string().min(6, "OTP must be 6 digits"),
+	otp: z.string().min(6, "OTP must be 6 digits").regex(/^\d{6}$/),
 });
 
 export const updateDetailsSchema = z.object({

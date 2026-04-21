@@ -24,13 +24,46 @@ export async function registerController(
 ) {
 	const { username, email, password } = req.body;
 	try {
-		const existingUser = await userModel.findOne({ email });
+		const existingUser = await userModel.findOne({ email, isVerified: true });
 		if (existingUser) {
 			return res
 				.status(409)
 				.json({ message: "Email Already In Use.Go to Login" });
 		}
+		const existingUnverifiedUser = await userModel.findOne({
+			email,
+			isVerified: false,
+		});
+		if (existingUnverifiedUser) {
+			const emailSubject = "verifyEmailOR";
 
+			const otp = generateOTP();
+			const html = getOtpHTML(otp, "resend_otp");
+
+			const mailSuccess = await sendVerificationEmail(
+				config.GMAIL_USER_EMAIL,
+				existingUnverifiedUser.email,
+				emailSubject,
+				html,
+			);
+			if (!mailSuccess) {
+				return res.status(503).json({
+					message: "Failed to send OTP email. Please try again later.",
+				});
+			}
+			const otpHash = await bcrypt.hash(otp, 12);
+
+			const otpObject = await OtpModel.create({
+				userId: existingUnverifiedUser._id,
+				otp: otpHash,
+				email: existingUnverifiedUser.email,
+				purpose: emailSubject,
+			});
+			return res.status(409).json({
+				message:
+					"Email Already Registered but not verified! Verification OTP sent to your email . Verify Email and complete registration!",
+			});
+		}
 		const hashedPass = await bcrypt.hash(password, 12);
 		const user = await userModel.create({
 			username,
@@ -43,16 +76,30 @@ export async function registerController(
 				message: "User Not Registered.Please try again Later!",
 			});
 		}
+		const tempToken = jwt.sign({ id: user._id }, config.JWT_SECRET, {
+			expiresIn: "10m",
+		});
+
+		res.cookie("tempToken", tempToken, {
+			...config.COOKIE_CONF_TT,
+			maxAge: 10 * 60 * 1000,
+		});
 		const otp = generateOTP();
 		const html = getOtpHTML(otp, "verifyEmailOR");
 
-		await sendVerificationEmail(
+		const mailSuccess = await sendVerificationEmail(
 			config.GMAIL_USER_EMAIL as string,
 			email,
 			"Email Verification on TaskAPI",
 			html,
 		);
-
+		if (!mailSuccess) {
+			await user.deleteOne();
+			return res.status(503).json({
+				message:
+					"Failed to send verification email. Please try registering again later.",
+			});
+		}
 		const otpHash = await bcrypt.hash(otp, 12);
 		const otpObject = await otpModel.create({
 			userId: user._id,
@@ -62,11 +109,8 @@ export async function registerController(
 		});
 
 		return res.status(201).json({
-			message: "user created successfully!",
-			data: {
-				username: user.username,
-				email: user.email,
-			},
+			message:
+				"User Registered Successfully! Verification OTP sent to your email . Verify Email and complete registration!",
 		});
 	} catch (error) {
 		next(error);
@@ -234,8 +278,8 @@ export async function logoutController(
 			});
 		}
 		await session.updateOne({ isRevoked: true });
-		res.clearCookie("rfToken");
-		res.clearCookie("acToken");
+		res.clearCookie("rfToken", config.COOKIE_CONF_RT);
+		res.clearCookie("acToken", config.COOKIE_CONF_AT);
 		res.status(200).json({
 			message: "User Logged Out Successfully !",
 		});
@@ -265,17 +309,25 @@ export async function updateDetailsController(
 		}
 		switch (fieldToUpdate) {
 			case "username":
-				await user.updateOne({ username: newValue as z.infer<typeof usernameSchema> });
+				await user.updateOne({
+					username: newValue as z.infer<typeof usernameSchema>,
+				});
 				break;
 			case "email":
 				const otp = generateOTP();
 				const html = getOtpHTML(otp, "verifyEmailUP");
-				await sendVerificationEmail(
+				const mailSuccess = await sendVerificationEmail(
 					config.GMAIL_USER_EMAIL,
 					user.email,
 					"Email Verification on TaskAPI",
 					html,
 				);
+				if (!mailSuccess) {
+					return res.status(503).json({
+						message:
+							"Failed to send verification email. Please try again later.",
+					});
+				}
 				const otpHash = await bcrypt.hash(otp, 12);
 				const otpObject = await otpModel.create({
 					userId: user._id,
@@ -290,22 +342,29 @@ export async function updateDetailsController(
 				const otp2 = generateOTP();
 				const html2 = getOtpHTML(otp2, "resetPassword");
 
-				await sendVerificationEmail(
+				const mailSuccess2 = await sendVerificationEmail(
 					config.GMAIL_USER_EMAIL,
 					user.email,
 					"Password Reset Verification on TaskAPI",
 					html2,
 				);
 
+				if (!mailSuccess2) {
+					return res.status(503).json({
+						message:
+							"Failed to send verification email. Please try again later.",
+					});
+				}
+
 				const otpHash2 = await bcrypt.hash(otp2, 12);
-				const newPasswordHash = await bcrypt.hash(newValue, 12); 
+				const newPasswordHash = await bcrypt.hash(newValue, 12);
 				const otpObject2 = await otpModel.create({
 					userId: user._id,
 					otp: otpHash2,
 					email: user.email,
 					purpose: "resetPassword",
 					isTemp: true,
-					fieldToUpdateNewValue: newPasswordHash
+					fieldToUpdateNewValue: newPasswordHash,
 				});
 				break;
 			default:
@@ -377,12 +436,17 @@ export async function recoverDeletedAccountController(
 		}
 		const otp = generateOTP();
 		const html = getOtpHTML(otp, "account_recovery");
-		await sendVerificationEmail(
+		const mailSuccess = await sendVerificationEmail(
 			config.GMAIL_USER_EMAIL,
 			user.email,
 			"Account Recovery Verification on TaskAPI",
 			html,
 		);
+		if (!mailSuccess) {
+			return res.status(503).json({
+				message: "Failed to send verification email. Please try again later.",
+			});
+		}
 		const otpHash = await bcrypt.hash(otp, 12);
 		const otpObject = await otpModel.create({
 			userId: user._id,
@@ -445,7 +509,7 @@ export async function verificationController(
 			return EmailVerificationHandler(otp)(req, res, next);
 		} else if (req.query.purpose === "ve-em-up") {
 			return EmailUpdationHandler(otp)(req, res, next);
-		} else if (req.query.purpose === "rs-pa") {
+		} else if (req.query.purpose === "re-pa") {
 			return ResetPasswordHandler(otp)(req, res, next);
 		} else if (req.query.purpose === "ac-re") {
 			return AccountRecoveryHandler(otp)(req, res, next);
@@ -459,37 +523,63 @@ export async function verificationController(
 	}
 }
 
-export async function resendOtpController(req:Request,res:Response,next:NextFunction) {
+export async function resendOtpController(
+	req: Request,
+	res: Response,
+	next: NextFunction,
+) {
 	try {
 		const { email } = req.body;
+		let attemptsLeft = 0;
 		const user = await userModel.findOne({ email });
 		if (!user) {
 			return res.status(404).json({ message: "User Not Found!" });
 		}
-		const existingOtp = await otpModel.findOne({
-			email,
-			isUsed: false,
-			expiryTime: { $gt: new Date() },
-		}).sort({ createdAt: -1 });
+		const existingOtp = await otpModel
+			.findOne({
+				email,
+				isUsed: false,
+				expiryTime: { $gt: new Date() },
+			})
+			.sort({ createdAt: -1 });
 
 		if (!existingOtp) {
-			return res.status(404).json({ message: "No valid OTP request found. Please initiate a new verification process." });
+			return res
+				.status(404)
+				.json({
+					message:
+						"No valid OTP request found. Please initiate a new verification process.",
+				});
 		}
-		
+
+		attemptsLeft += 1;
+		if (attemptsLeft > 5) {
+			await existingOtp.updateOne({ isUsed: true });
+			return res
+				.status(429)
+				.json({
+					message:
+						"Maximum OTP resend attempts reached. Please initiate a new verification process.",
+				});
+		}
 		const purpose = existingOtp.purpose;
-		
+
 		const emailSubject = emailPurposeMapper(purpose);
 
-		const otp =  generateOTP();
-		const html = getOtpHTML(otp, "verifyEmailOR");
+		const otp = generateOTP();
+		const html = getOtpHTML(otp, "resend_otp");
 
-		await sendVerificationEmail(
+		const mailSuccess = await sendVerificationEmail(
 			config.GMAIL_USER_EMAIL,
 			user.email,
 			emailSubject,
 			html,
 		);
-
+		if (!mailSuccess) {
+			return res.status(503).json({
+				message: "Failed to send OTP email. Please try again later.",
+			});
+		}
 		const otpHash = await bcrypt.hash(otp, 12);
 
 		await existingOtp.updateOne({ isUsed: true });
@@ -499,6 +589,11 @@ export async function resendOtpController(req:Request,res:Response,next:NextFunc
 			otp: otpHash,
 			email: user.email,
 			purpose,
+		});
+
+		return res.status(200).json({
+			message: "OTP resent successfully! Please check your email.",
+			attemptsLeft: 5 - attemptsLeft,
 		});
 	} catch (error) {
 		next(error);

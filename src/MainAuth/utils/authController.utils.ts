@@ -21,6 +21,7 @@ export const EmailVerificationHandler =
 			const otpRecord = await OtpModel.findOne({
 				userId: decoded.id,
 				purpose: "verifyEmailOR",
+				isUsed: false,
 			});
 			if (!otpRecord) {
 				return res.status(400).json({ message: "Invalid OTP!" });
@@ -41,7 +42,7 @@ export const EmailVerificationHandler =
 			}
 			await user.updateOne({ isVerified: true });
 			await otpRecord.updateOne({ isUsed: true });
-			res.clearCookie("tempToken");
+			res.clearCookie("tempToken",config.COOKIE_CONF_TT);
 			await OtpModel.deleteOne({ _id: otpRecord._id });
 			return res.status(200).json({ message: "Email Verified Successfully!" });
 		} catch (error) {
@@ -60,6 +61,7 @@ export const ResetPasswordHandler =
 				userId: decoded.id,
 				purpose: "resetPassword",
 				isTemp: true,
+				isUsed: false
 			});
 			if (!otpRecord) {
 				return res.status(400).json({ message: "Invalid OTP!" });
@@ -100,6 +102,7 @@ export const EmailUpdationHandler =
 				userId: decoded.id,
 				purpose: "verifyEmailUP",
 				isTemp: true,
+				isUsed: false
 			});
 			if (!otpRecord) {
 				return res.status(400).json({ message: "Invalid OTP!" });
@@ -143,6 +146,8 @@ export const AccountRecoveryHandler =
 				userId: decoded.id,
 				purpose: "account_recovery",
 				isTemp: true,
+				isUsed: false
+
 			});
 			if (!otpRecord) {
 				return res.status(400).json({ message: "Invalid OTP!" });
@@ -186,6 +191,8 @@ export const emailPurposeMapper = (purpose: string): string => {
 			return "Password Reset Verification for Your TaskAPI Account";
 		case "account_recovery":
 			return "Account Recovery Verification for Your TaskAPI Account";
+		case "resend_otp":
+			return "OTP Verification for Your TaskAPI Account";
 		default:
 			return "Email Verification";
 	}

@@ -7,6 +7,7 @@ export interface Config {
 	JWT_SECRET_2: string;
 	COOKIE_CONF_RT: object;
 	COOKIE_CONF_AT: object;
+	COOKIE_CONF_TT: object;
 	NODE_ENV: string;
 	GMAIL_USER_EMAIL: string;
 	GMAIL_REFRESH_TOKEN: string;

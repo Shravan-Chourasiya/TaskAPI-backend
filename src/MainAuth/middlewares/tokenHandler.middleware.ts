@@ -40,7 +40,10 @@ export async function refreshTokenHandler(
 		req.cookies.rfToken,
 		config.JWT_SECRET,
 	) as JwtPayload;
-	const rfTokenRecord = await sessionModel.findOne({ userId: decoded.id });
+	const rfTokenRecord = await sessionModel.findOne({
+		userId: decoded.id,
+		refreshToken: req.cookies.rfToken,
+	});
 	if (!rfTokenRecord) {
 		return res.status(401).json({
 			message: "Unauthorized | Invalid Refresh Token!.",

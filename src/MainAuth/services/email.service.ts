@@ -28,6 +28,7 @@ export async function sendVerificationEmail(
 			html: html,
 		});
 		console.log("Email sent successfully:", info.messageId);
+		return info.messageId;
 	} catch (err) {
 		const error = err as NodemailerError;
 
