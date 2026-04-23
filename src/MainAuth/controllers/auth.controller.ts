@@ -145,7 +145,7 @@ export async function loginController(
 					"Account Scheduled for Deletion! Complete Account Recovery Procedure within 30 days to recover your account!",
 			});
 		}
-		const refreshToken = jwt.sign({ id: isUser._id }, config.JWT_SECRET, {
+		const refreshToken = jwt.sign({ id: isUser._id, ip: req.ip, ua: req.headers["user-agent"] }, config.JWT_SECRET, {
 			expiresIn: "7d",
 		});
 		const accessToken = jwt.sign(
@@ -201,7 +201,9 @@ export async function tokenRotationController(
 		const rfTokenDecoded = jwt.verify(rfToken, config.JWT_SECRET) as JwtPayload;
 		const session = await sessionModel.findOne({
 			userId: rfTokenDecoded.id,
-			isRevoked: false,
+			userIP: rfTokenDecoded.ip,
+			userAgents: rfTokenDecoded.ua,
+			isRevoked: false
 		});
 		if (!session) {
 			return res.status(400).json({
@@ -261,6 +263,8 @@ export async function logoutController(
 		const rfTokenDecoded = jwt.verify(rfToken, config.JWT_SECRET) as JwtPayload;
 		const session = await sessionModel.findOne({
 			userId: rfTokenDecoded.id,
+			userIP: rfTokenDecoded.ip,
+			userAgents: rfTokenDecoded.ua,
 			isRevoked: false,
 		});
 		if (!session) {
@@ -530,7 +534,6 @@ export async function resendOtpController(
 ) {
 	try {
 		const { email } = req.body;
-		let attemptsLeft = 0;
 		const user = await userModel.findOne({ email });
 		if (!user) {
 			return res.status(404).json({ message: "User Not Found!" });
@@ -539,6 +542,7 @@ export async function resendOtpController(
 			.findOne({
 				email,
 				isUsed: false,
+				attemptsLeft: { $gt: 0 },
 				expiryTime: { $gt: new Date() },
 			})
 			.sort({ createdAt: -1 });
@@ -549,17 +553,6 @@ export async function resendOtpController(
 				.json({
 					message:
 						"No valid OTP request found. Please initiate a new verification process.",
-				});
-		}
-
-		attemptsLeft += 1;
-		if (attemptsLeft > 5) {
-			await existingOtp.updateOne({ isUsed: true });
-			return res
-				.status(429)
-				.json({
-					message:
-						"Maximum OTP resend attempts reached. Please initiate a new verification process.",
 				});
 		}
 		const purpose = existingOtp.purpose;
@@ -581,8 +574,8 @@ export async function resendOtpController(
 			});
 		}
 		const otpHash = await bcrypt.hash(otp, 12);
-
-		await existingOtp.updateOne({ isUsed: true });
+		const newAttemptsLeft = existingOtp.attemptsLeft > 0 ? existingOtp.attemptsLeft - 1 : 0;
+		await existingOtp.updateOne({ isUsed: true ,attemptsLeft: newAttemptsLeft});
 
 		const otpObject = await OtpModel.create({
 			userId: user._id,
@@ -593,7 +586,6 @@ export async function resendOtpController(
 
 		return res.status(200).json({
 			message: "OTP resent successfully! Please check your email.",
-			attemptsLeft: 5 - attemptsLeft,
 		});
 	} catch (error) {
 		next(error);

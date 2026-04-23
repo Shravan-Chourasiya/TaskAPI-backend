@@ -28,6 +28,11 @@ export function getOtpHTML(otp:string, purpose:string) {
             actionText = "Recover Account";
             purposeAbb = "ac-re";
             break;
+        case "resend_otp":
+            purposeDescription = "New OTP for your previous request.";
+            actionText = "Resend OTP";
+            purposeAbb = "re-otp";
+            break;
     }
 
     return `

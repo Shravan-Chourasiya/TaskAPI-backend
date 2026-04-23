@@ -15,7 +15,7 @@ export const EmailVerificationHandler =
 	(otp: string) => async (req: Request, res: Response, next: NextFunction) => {
 		const decoded = jwt.verify(
 			req.cookies.tempToken,
-			config.JWT_SECRET_2,
+			config.JWT_SECRET,
 		) as JwtPayload;
 		try {
 			const otpRecord = await OtpModel.findOne({

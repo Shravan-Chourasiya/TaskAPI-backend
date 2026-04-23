@@ -18,6 +18,7 @@ export interface OTPModel {
     fieldToUpdateNewValue?: string;
     isTemp: boolean;
     isUsed: boolean;
+    attemptsLeft: number;
     expiryTime: Date;
     createdAt: Date;
     updatedAt: Date;

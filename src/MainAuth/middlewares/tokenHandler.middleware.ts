@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import { sessionModel } from "../models/session.model.js";
 import jwt, { type JwtPayload } from "jsonwebtoken";
 import { config } from "../configs/configs.js";
+import bcrypt from "bcryptjs";
 
 type RequestWithUser = Request & {
 	userID?: string;
@@ -42,9 +43,13 @@ export async function refreshTokenHandler(
 	) as JwtPayload;
 	const rfTokenRecord = await sessionModel.findOne({
 		userId: decoded.id,
-		refreshToken: req.cookies.rfToken,
+		userIP:decoded.ip,
+		userAgents:decoded.ua,
+		isRevoked:false
 	});
-	if (!rfTokenRecord) {
+	const refreshTokenFromDB = String(rfTokenRecord?.refreshToken);
+	const isRfTokenValid = bcrypt.compareSync(req.cookies.rfToken, refreshTokenFromDB);
+	if (!isRfTokenValid||!rfTokenRecord) {
 		return res.status(401).json({
 			message: "Unauthorized | Invalid Refresh Token!.",
 		});

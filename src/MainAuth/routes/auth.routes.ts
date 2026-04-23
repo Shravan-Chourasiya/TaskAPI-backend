@@ -7,8 +7,8 @@ import {
 import { otpRateLimiter } from "../middlewares/rateLimiting.middleware.js";
 import { ZodValidatorMiddleware } from "../middlewares/zodValidation.middleware.js";
 import {
-	emailSchema,
 	loginDeleteRecoverAccSchema,
+	otpResendSchema,
 	otpSchema,
 	registerSchema,
 	updateDetailsSchema,
@@ -72,9 +72,9 @@ router.post(
 
 router.post(
 	"/resend-otp",
-	ZodValidatorMiddleware(emailSchema),
+	ZodValidatorMiddleware(otpResendSchema),
 	otpRateLimiter,
-	authControllers.resendOtpController
+	authControllers.resendOtpController,
 );
 
 export { router as authRouter };

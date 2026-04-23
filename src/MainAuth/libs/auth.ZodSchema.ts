@@ -26,6 +26,7 @@ export const updateDetailsSchema = z.object({
 	password: z.string().min(8, "Password must be at least 8 characters long"),
 });
 
+export const otpResendSchema = z.object({ email: z.email() });
 
 
 
