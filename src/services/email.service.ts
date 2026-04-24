@@ -1,6 +1,6 @@
 import nodemailer from "nodemailer";
 import { config } from "../configs/configs.js";
-import type { NodemailerError } from "../types/nodemailer.interface.js";
+import type { NodemailerError } from "../modules/auth/types/nodemailer.interface.js";
 
 const transporter = nodemailer.createTransport({
 	service: "gmail",

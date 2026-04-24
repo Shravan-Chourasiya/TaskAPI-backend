@@ -1,13 +1,13 @@
 import type { NextFunction, Request, Response } from "express";
 import jwt, { type JwtPayload } from "jsonwebtoken";
-import { config } from "../configs/configs.js";
+import { config } from "../../../configs/configs.js";
 import { OtpModel } from "../models/otp.model.js";
 import bcrypt from "bcryptjs";
 import { userModel } from "../models/user.model.js";
-import { generateOTP, getOtpHTML } from "./email.utils.js";
-import { sendVerificationEmail } from "../services/email.service.js";
-import type { UserModel } from "../types/dbModel.interface.js";
-import type { emailSchema, passwordSchema } from "../libs/auth.ZodSchema.js";
+import { generateOTP, getOtpHTML } from "../../../utils/email.utils.js";
+import { sendVerificationEmail } from "../../../services/email.service.js";
+import type { UserModel } from "../types/dbmodel.interface.js";
+import type { emailSchema, passwordSchema } from "../../../libs/zodschemas.js";
 import * as z from "zod";
 import e from "express";
 
@@ -42,7 +42,7 @@ export const EmailVerificationHandler =
 			}
 			await user.updateOne({ isVerified: true });
 			await otpRecord.updateOne({ isUsed: true });
-			res.clearCookie("tempToken",config.COOKIE_CONF_TT);
+			res.clearCookie("tempToken", config.COOKIE_CONF_TT);
 			await OtpModel.deleteOne({ _id: otpRecord._id });
 			return res.status(200).json({ message: "Email Verified Successfully!" });
 		} catch (error) {
@@ -61,7 +61,7 @@ export const ResetPasswordHandler =
 				userId: decoded.id,
 				purpose: "resetPassword",
 				isTemp: true,
-				isUsed: false
+				isUsed: false,
 			});
 			if (!otpRecord) {
 				return res.status(400).json({ message: "Invalid OTP!" });
@@ -80,7 +80,11 @@ export const ResetPasswordHandler =
 			if (!user) {
 				return res.status(404).json({ message: "User Not Found!" });
 			}
-			await user.updateOne({ password: otpRecord.fieldToUpdateNewValue as z.infer<typeof passwordSchema> });
+			await user.updateOne({
+				password: otpRecord.fieldToUpdateNewValue as z.infer<
+					typeof passwordSchema
+				>,
+			});
 			await user.save();
 			await otpRecord.updateOne({ isUsed: true });
 			await OtpModel.deleteOne({ _id: otpRecord._id });
@@ -102,7 +106,7 @@ export const EmailUpdationHandler =
 				userId: decoded.id,
 				purpose: "verifyEmailUP",
 				isTemp: true,
-				isUsed: false
+				isUsed: false,
 			});
 			if (!otpRecord) {
 				return res.status(400).json({ message: "Invalid OTP!" });
@@ -123,7 +127,9 @@ export const EmailUpdationHandler =
 			if (!user) {
 				return res.status(404).json({ message: "User Not Found!" });
 			}
-			await user.updateOne({ email: otpRecord.fieldToUpdateNewValue as z.infer<typeof emailSchema> });
+			await user.updateOne({
+				email: otpRecord.fieldToUpdateNewValue as z.infer<typeof emailSchema>,
+			});
 			await otpRecord.updateOne({ isUsed: true });
 			await OtpModel.deleteOne({ _id: otpRecord._id });
 			return res.status(200).json({
@@ -146,8 +152,7 @@ export const AccountRecoveryHandler =
 				userId: decoded.id,
 				purpose: "account_recovery",
 				isTemp: true,
-				isUsed: false
-
+				isUsed: false,
 			});
 			if (!otpRecord) {
 				return res.status(400).json({ message: "Invalid OTP!" });
@@ -182,7 +187,7 @@ export const AccountRecoveryHandler =
 	};
 
 export const emailPurposeMapper = (purpose: string): string => {
-	switch(purpose) {
+	switch (purpose) {
 		case "verifyEmailOR":
 			return "Email Verification for New Registration on TaskAPI";
 		case "verifyEmailUP":

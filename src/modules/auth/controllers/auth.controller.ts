@@ -2,9 +2,9 @@ import { userModel } from "../models/user.model.js";
 import jwt, { type JwtPayload } from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { sessionModel } from "../models/session.model.js";
-import { config } from "../configs/configs.js";
-import { generateOTP, getOtpHTML } from "../utils/email.utils.js";
-import { sendVerificationEmail } from "../services/email.service.js";
+import { config } from "../../../configs/configs.js";
+import { generateOTP, getOtpHTML } from "../../../utils/email.utils.js";
+import { sendVerificationEmail } from "../../../services/email.service.js";
 import { OtpModel, OtpModel as otpModel } from "../models/otp.model.js";
 import type { NextFunction, Request, Response } from "express";
 import {
@@ -13,9 +13,9 @@ import {
 	EmailUpdationHandler,
 	EmailVerificationHandler,
 	ResetPasswordHandler,
-} from "../utils/authController.utils.js";
+} from "../utils/authcontroller.utils.js";
 import * as z from "zod";
-import type { usernameSchema } from "../libs/auth.ZodSchema.js";
+import type { usernameSchema } from "../../../libs/zodschemas.js";
 
 export async function registerController(
 	req: Request,
@@ -145,9 +145,13 @@ export async function loginController(
 					"Account Scheduled for Deletion! Complete Account Recovery Procedure within 30 days to recover your account!",
 			});
 		}
-		const refreshToken = jwt.sign({ id: isUser._id, ip: req.ip, ua: req.headers["user-agent"] }, config.JWT_SECRET, {
-			expiresIn: "7d",
-		});
+		const refreshToken = jwt.sign(
+			{ id: isUser._id, ip: req.ip, ua: req.headers["user-agent"] },
+			config.JWT_SECRET,
+			{
+				expiresIn: "7d",
+			},
+		);
 		const accessToken = jwt.sign(
 			{ id: isUser._id, email: isUser.email },
 			config.JWT_SECRET_2,
@@ -203,7 +207,7 @@ export async function tokenRotationController(
 			userId: rfTokenDecoded.id,
 			userIP: rfTokenDecoded.ip,
 			userAgents: rfTokenDecoded.ua,
-			isRevoked: false
+			isRevoked: false,
 		});
 		if (!session) {
 			return res.status(400).json({
@@ -232,9 +236,13 @@ export async function tokenRotationController(
 			config.JWT_SECRET_2,
 			{ expiresIn: 600 },
 		);
-		const newRfToken = jwt.sign({ id: user._id }, config.JWT_SECRET, {
-			expiresIn: "7d",
-		});
+		const newRfToken = jwt.sign(
+			{ id: user._id, ip: req.ip, ua: req.headers["user-agent"] },
+			config.JWT_SECRET,
+			{
+				expiresIn: "7d",
+			},
+		);
 		const newRfTokenHash = await bcrypt.hash(newRfToken, 12);
 		await session.updateOne({ refreshToken: newRfTokenHash, isRevoked: false });
 
@@ -548,12 +556,10 @@ export async function resendOtpController(
 			.sort({ createdAt: -1 });
 
 		if (!existingOtp) {
-			return res
-				.status(404)
-				.json({
-					message:
-						"No valid OTP request found. Please initiate a new verification process.",
-				});
+			return res.status(404).json({
+				message:
+					"No valid OTP request found. Please initiate a new verification process.",
+			});
 		}
 		const purpose = existingOtp.purpose;
 
@@ -574,14 +580,20 @@ export async function resendOtpController(
 			});
 		}
 		const otpHash = await bcrypt.hash(otp, 12);
-		const newAttemptsLeft = existingOtp.attemptsLeft > 0 ? existingOtp.attemptsLeft - 1 : 0;
-		await existingOtp.updateOne({ isUsed: true ,attemptsLeft: newAttemptsLeft});
+		const newAttemptsLeft =
+			existingOtp.attemptsLeft > 0 ? existingOtp.attemptsLeft - 1 : 0;
 
 		const otpObject = await OtpModel.create({
 			userId: user._id,
 			otp: otpHash,
 			email: user.email,
 			purpose,
+			attemptsLeft: newAttemptsLeft,
+		});
+
+		await existingOtp.updateOne({
+			isUsed: true,
+			attemptsLeft: newAttemptsLeft,
 		});
 
 		return res.status(200).json({

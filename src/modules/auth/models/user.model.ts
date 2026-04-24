@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import type { UserModel } from "../types/dbModel.interface.js";
+import type { UserModel } from "../types/dbmodel.interface.js";
 
 const userSchema = new mongoose.Schema({
 	username: {

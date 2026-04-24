@@ -5,12 +5,12 @@ import express, {
 } from "express";
 import cookieParser from "cookie-parser";
 import morgan from "morgan";
-import dbConnect from "./MainAuth/configs/db.js";
-import { config } from "./MainAuth/configs/configs.js";
-import { classifyError } from "./MainAuth/middlewares/errorHandler.middleware.js";
-import { rateLimitMiddleware } from "./MainAuth/middlewares/rateLimiting.middleware.js";
+import dbConnect from "./configs/db.js";
+import { config } from "./configs/configs.js";
+import { classifyError } from "./middlewares/errorhandler.middleware.js";
+import { rateLimitMiddleware } from "./middlewares/ratelimiting.middleware.js";
 import cors from "cors";
-import { authRouter } from "./MainAuth/routes/auth.routes.js";
+import { authRouter } from "./routes/auth.routes.js";
 const app = express();
 
 await dbConnect();

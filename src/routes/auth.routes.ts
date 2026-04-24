@@ -1,18 +1,18 @@
 import express from "express";
-import * as authControllers from "../controllers/auth.controller.js";
+import * as authControllers from "../modules/auth/controllers/auth.controller.js";
 import {
 	accessTokenHandler,
 	refreshTokenHandler,
-} from "../middlewares/tokenHandler.middleware.js";
-import { otpRateLimiter } from "../middlewares/rateLimiting.middleware.js";
-import { ZodValidatorMiddleware } from "../middlewares/zodValidation.middleware.js";
+} from "../middlewares/tokenhandler.middleware.js";
+import { otpRateLimiter } from "../middlewares/ratelimiting.middleware.js";
+import { ZodValidatorMiddleware } from "../middlewares/zodvalidation.middleware.js";
 import {
 	loginDeleteRecoverAccSchema,
 	otpResendSchema,
 	otpSchema,
 	registerSchema,
 	updateDetailsSchema,
-} from "../libs/auth.ZodSchema.js";
+} from "../libs/zodschemas.js";
 
 const router = express.Router();
 
