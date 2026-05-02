@@ -1,5 +1,5 @@
 import jwt from "jsonwebtoken";
-import type { AppError } from "../modules/auth/types/errors.interface.js";
+import type { AppError } from "../modules/auth/Types/errors.interface.js";
 
 export function classifyError(err: unknown): {
 	status: number;

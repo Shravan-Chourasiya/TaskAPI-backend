@@ -1,12 +1,12 @@
 import type { NextFunction, Request, Response } from "express";
 import jwt, { type JwtPayload } from "jsonwebtoken";
-import { config } from "../../../configs/configs.js";
+import { config } from "../../../configs/app.config.js";
 import { OtpModel } from "../models/otp.model.js";
 import bcrypt from "bcryptjs";
-import { userModel } from "../models/user.model.js";
+import { userModel } from "../models/users/user.schema.js";
 import { generateOTP, getOtpHTML } from "../../../utils/email.utils.js";
-import { sendVerificationEmail } from "../../../services/email.service.js";
-import type { UserModel } from "../types/dbmodel.interface.js";
+import { sendVerificationEmail } from "../../../services/nodemailer.service.js";
+import type { UserModel } from "../Types/dbmodel.interface.js";
 import type { emailSchema, passwordSchema } from "../../../libs/zodschemas.js";
 import * as z from "zod";
 import e from "express";

@@ -1,10 +1,10 @@
-import { userModel } from "../models/user.model.js";
+import { userModel } from "../models/users/user.schema.js";
 import jwt, { type JwtPayload } from "jsonwebtoken";
 import bcrypt from "bcryptjs";
-import { sessionModel } from "../models/session.model.js";
-import { config } from "../../../configs/configs.js";
+import { sessionModel } from "../models/session/session.model.js";
+import { config } from "../../../configs/app.config.js";
 import { generateOTP, getOtpHTML } from "../../../utils/email.utils.js";
-import { sendVerificationEmail } from "../../../services/email.service.js";
+import { sendVerificationEmail } from "../../../services/nodemailer.service.js";
 import { OtpModel, OtpModel as otpModel } from "../models/otp.model.js";
 import type { NextFunction, Request, Response } from "express";
 import {
