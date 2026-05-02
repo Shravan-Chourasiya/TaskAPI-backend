@@ -1,0 +1,8 @@
+purposes optiosn in otp model stored in database={
+            "emailVerification",
+            "emailChange",
+            "phoneVerification",
+            "passwordReset",
+            "accountRecovery",
+            "twoFactorAuth",
+    }

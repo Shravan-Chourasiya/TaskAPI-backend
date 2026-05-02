@@ -1,0 +1,98 @@
+import mongoose from "mongoose";
+
+export const sessionSchema = new mongoose.Schema(
+	{
+		userId: {
+			type: mongoose.Schema.Types.ObjectId,
+			ref: "Users",
+			required: [true, "User ID is required"],
+			index: true,
+		},
+
+		deviceId: {
+			type: String,
+			required: [true, "Device ID is required"],
+			index: true,
+		},
+
+		deviceInfo: {
+			userAgent: String,
+			deviceType: {
+				type: String,
+				enum: ["mobile", "tablet", "desktop"],
+			},
+			browser: String,
+			os: String,
+		},
+
+		ipAddress: {
+			type: String,
+			required: [true, "IP address is required"],
+		},
+
+		ipCountry: String,
+
+		ipRegion: String,
+
+		ipCity: String,
+
+		accessTokenHash: {
+			type: String,
+			required: [true, "Access token is required"],
+			select: false,
+		},
+		refreshTokenHash: {
+			type: String,
+			required: [true, "Refresh token is required"],
+			select: false,
+		},
+		tokenFamily: {
+			type: String,
+			index: true,
+		},
+
+		status: {
+			type: String,
+			enum: ["active", "revoked", "expired"],
+			default: "active",
+		},
+
+		isRevoked: {
+			type: Boolean,
+			default: false,
+			index: true,
+		},
+
+		revokedAt: Date,
+		
+		lastActivityAt: {
+			type: Date,
+			default: () => new Date(),
+			index: true,
+		},
+
+		accessTokenExpiresAt: {
+			type: Date,
+			required: true,
+		},
+
+		refreshTokenExpiresAt: {
+			type: Date,
+			required: true
+		},
+		
+	},
+	{
+		timestamps: true,
+		collection: "sessions",
+	},
+);
+
+type SessionModelType = mongoose.InferSchemaType<typeof sessionSchema>;
+
+const sessionModel = mongoose.model<SessionModelType>(
+	"Sessions",
+	sessionSchema,
+);
+
+export default sessionModel;
