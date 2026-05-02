@@ -1,5 +1,5 @@
 import "dotenv/config";
-import type { Config } from "../modules/auth/types/config.interface.js";
+import type { Config } from "../modules/auth/Types/config.interface.js";
 import {
 	getCookieVar,
 	getEnvVar,

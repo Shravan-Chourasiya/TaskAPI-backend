@@ -1,9 +1,9 @@
 import mongoose from "mongoose";
-import { config } from "./configs.js";
+import { config } from "./app.config.js";
 
 async function dbConnect() {
-	const uri: string = config.MONGO_URI as string;
-	const dbname = config.DB_NAME as string;
+	const uri: string = config.MONGO_URI;
+	const dbname = config.DB_NAME;
 	try {
 		const isConnectionExists = mongoose.connection.readyState;
 		if (isConnectionExists === 1) {

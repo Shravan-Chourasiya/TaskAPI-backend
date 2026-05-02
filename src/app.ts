@@ -6,7 +6,7 @@ import express, {
 import cookieParser from "cookie-parser";
 import morgan from "morgan";
 import dbConnect from "./configs/db.js";
-import { config } from "./configs/configs.js";
+import { config } from "./configs/app.config.js";
 import { classifyError } from "./middlewares/errorhandler.middleware.js";
 import { rateLimitMiddleware } from "./middlewares/ratelimiting.middleware.js";
 import cors from "cors";

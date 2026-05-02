@@ -1,4 +1,4 @@
-import { config } from "../configs/configs.js";
+import { config } from "../configs/app.config.js";
 import crypto from "crypto";
 
 export function generateOTP() {
