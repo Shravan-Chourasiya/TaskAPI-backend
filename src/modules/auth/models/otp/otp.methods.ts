@@ -1,8 +1,10 @@
 // ============ INSTANCE METHODS ============
-
-import { otpSchema } from "./otp.model.js";
-
-// Verify OTP
+/**
+ * Verify provided OTP against stored hash.
+ * Decrements attempts on failure, marks as verified on success.
+ * @param {string} providedOtp - OTP provided by user
+ * @returns {Promise<boolean>} True if OTP matches and is valid
+ */
 otpSchema.methods.verify = async function (
 	providedOtp: string,
 ): Promise<boolean> {
@@ -38,7 +40,10 @@ otpSchema.methods.verify = async function (
 	return true;
 };
 
-// Record failed attempt
+/**
+ * Record a failed OTP verification attempt.
+ * Increments failed attempts counter and updates last attempt timestamp.
+ */
 otpSchema.methods.recordFailedAttempt = async function (
 ): Promise<void> {
 	this.attemptsLeft -= 1;
@@ -53,7 +58,11 @@ otpSchema.methods.recordFailedAttempt = async function (
 	await this.save();
 };
 
-// Check if rate limited
+/**
+ * Check if OTP verification is rate limited.
+ * Blocks verification if 3+ failed attempts within 1 minute window.
+ * @returns {boolean} True if rate limited
+ */
 otpSchema.methods.isRateLimited = function (): boolean {
 	if (!this.lastAttemptAt) return false;
 
@@ -65,7 +74,12 @@ otpSchema.methods.isRateLimited = function (): boolean {
 };
 
 // ============ STATIC METHODS ============
-// Find valid OTP for user
+/**
+ * Find a valid (pending, unused, not expired) OTP for a user.
+ * @param {string} userId - User ID
+ * @param {string} purpose - OTP purpose
+ * @returns {Promise} Valid OTP document or null
+ */
 otpSchema.statics.findValidOTP = function (userId: string, purpose: string) {
 	return this.findOne({
 		userId,
@@ -76,7 +90,12 @@ otpSchema.statics.findValidOTP = function (userId: string, purpose: string) {
 	});
 };
 
-// Find valid OTP by email
+/**
+ * Find a valid OTP by email address.
+ * @param {string} email - Email address
+ * @param {string} purpose - OTP purpose
+ * @returns {Promise} Valid OTP document or null
+ */
 otpSchema.statics.findValidOTPByEmail = function (
 	email: string,
 	purpose: string,
@@ -90,7 +109,12 @@ otpSchema.statics.findValidOTPByEmail = function (
 	});
 };
 
-// Invalidate previous OTPs for user
+/**
+ * Invalidate all previous pending OTPs for a user and purpose.
+ * Ensures only 1 valid OTP exists per purpose at any time.
+ * @param {string} userId - User ID
+ * @param {string} purpose - OTP purpose
+ */
 otpSchema.statics.invalidatePreviousOTPs = async function (
 	userId: string,
 	purpose: string,
@@ -109,7 +133,11 @@ otpSchema.statics.invalidatePreviousOTPs = async function (
 	);
 };
 
-// Get OTP statistics
+/**
+ * Get OTP statistics for a user.
+ * @param {string} userId - User ID
+ * @returns {Promise<Object>} Statistics object with total, verified, failed, expired counts
+ */
 otpSchema.statics.getStatistics = async function (userId: string) {
 	const [total, verified, failed, expired] = await Promise.all([
 		this.countDocuments({ userId }),
@@ -121,7 +149,11 @@ otpSchema.statics.getStatistics = async function (userId: string) {
 	return { total, verified, failed, expired };
 };
 
-// Clean up old OTPs (manual cleanup if TTL doesn't work)
+/**
+ * Clean up expired and failed OTPs from database.
+ * Complements TTL index for manual cleanup if needed.
+ * @returns {Promise<number>} Number of deleted documents
+ */
 otpSchema.statics.cleanupExpiredOTPs = async function (): Promise<number> {
 	const result = await this.deleteMany({
 		expiresAt: { $lt: new Date() },

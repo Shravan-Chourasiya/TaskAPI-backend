@@ -36,6 +36,7 @@ export const sessionSchema = new mongoose.Schema(
 
 		ipCity: String,
 
+		// ============ TOKEN HASHES (Audit Trail Only) ============
 		accessTokenHash: {
 			type: String,
 			required: [true, "Access token is required"],
@@ -46,6 +47,12 @@ export const sessionSchema = new mongoose.Schema(
 			required: [true, "Refresh token is required"],
 			select: false,
 		},
+		/**
+		 * Token family ID for detecting token theft attacks.
+		 * Generated on every token refresh. If mismatch detected between
+		 * user's refresh token family and latest session family = token theft.
+		 * Strategy: "lose 1, lose all" - revoke all sessions when theft detected.
+		 */
 		tokenFamily: {
 			type: String,
 			index: true,
