@@ -1,4 +1,7 @@
 // ============ INSTANCE METHODS ============
+
+import { otpSchema } from "./otp.schema.js";
+
 /**
  * Verify provided OTP against stored hash.
  * Decrements attempts on failure, marks as verified on success.

@@ -1,7 +1,7 @@
 import { userModel } from "../models/users/user.schema.js";
 import jwt, { type JwtPayload } from "jsonwebtoken";
 import bcrypt from "bcryptjs";
-import { sessionModel } from "../models/session/session.model.js";
+import { sessionModel } from "../models/session/session.schema.js";
 import { config } from "../../../configs/app.config.js";
 import { generateOTP, getOtpHTML } from "../../../utils/email.utils.js";
 import { sendVerificationEmail } from "../../../services/nodemailer.service.js";

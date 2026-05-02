@@ -1,4 +1,4 @@
-import { otpSchema } from "./otp.model.js";
+import { otpSchema } from "./otp.schema.js";
 
 // ============ INDEXES ============
 otpSchema.index({ userId: 1, otpStatus: 1 });

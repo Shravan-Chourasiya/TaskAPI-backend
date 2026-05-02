@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
-import { sessionModel } from "../modules/auth/models/session/session.model.js";
+import { sessionModel } from "../modules/auth/models/session/session.schema.js";
 import jwt, { type JwtPayload } from "jsonwebtoken";
 import { config } from "../configs/app.config.js";
 import bcrypt from "bcryptjs";
