@@ -4,7 +4,6 @@ import {
 	accessTokenHandler,
 	refreshTokenHandler,
 } from "../middlewares/tokenhandler.middleware.js";
-import { otpRateLimiter } from "../middlewares/ratelimiting.middleware.js";
 import { ZodValidatorMiddleware } from "../middlewares/zodvalidation.middleware.js";
 import {
 	loginDeleteRecoverAccSchema,
@@ -13,24 +12,27 @@ import {
 	registerSchema,
 	updateDetailsSchema,
 } from "../libs/zodschemas.js";
+import { authRateLimiter, otpGenerationLimiter, otpVerificationLimiter } from "../middlewares/ratelimiting.middleware.js";
 
 const router = express.Router();
 
 router.post(
 	"/register",
+	authRateLimiter,
 	ZodValidatorMiddleware(registerSchema),
 	authControllers.registerController,
 );
 
 router.post(
 	"/verify",
+	otpVerificationLimiter,
 	ZodValidatorMiddleware(otpSchema),
-	otpRateLimiter,
 	authControllers.verificationController,
 );
 
 router.post(
 	"/login",
+	authRateLimiter,
 	ZodValidatorMiddleware(loginDeleteRecoverAccSchema),
 	authControllers.loginController,
 );
@@ -73,7 +75,7 @@ router.post(
 router.post(
 	"/resend-otp",
 	ZodValidatorMiddleware(otpResendSchema),
-	otpRateLimiter,
+	otpGenerationLimiter,
 	authControllers.resendOtpController,
 );
 
