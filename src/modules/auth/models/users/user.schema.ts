@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import type { UserType } from "../../Types/mongo_models/user.type.js";
 
 export const userSchema = new mongoose.Schema(
 	{
@@ -26,7 +27,7 @@ export const userSchema = new mongoose.Schema(
 			index: true,
 		},
 
-		password: {
+		passwordHash: {
 			type: String,
 			required: [true, "Password is required"],
 			minlength: [8, "Password must be at least 8 characters"],
@@ -79,8 +80,6 @@ export const userSchema = new mongoose.Schema(
 
 		lastLoginAt: Date,
 
-		lastLoginIP: String,
-
 		loginCount: {
 			type: Number,
 			default: 0,
@@ -88,7 +87,8 @@ export const userSchema = new mongoose.Schema(
 
 		lastLoginDevice: {
 			type: [
-				{
+				{	
+					deviceIP: String,
 					userAgent: String,
 					deviceType: String,
 					browser: String,
@@ -124,7 +124,7 @@ export const userSchema = new mongoose.Schema(
 				trim: true,
 				maxlength: [50, "Last name cannot exceed 50 characters"],
 			},
-			avatar: String,
+			avatarUrl: String,
 			bio: {
 				type: String,
 				maxlength: [500, "Bio cannot exceed 500 characters"],
@@ -136,6 +136,11 @@ export const userSchema = new mongoose.Schema(
 			phoneVerified: {
 				type: Boolean,
 				default: false,
+			},
+			country: {
+				type: String,
+				trim: true,
+				maxlength: [100, "Country name cannot exceed 100 characters"]
 			},
 		},
 
@@ -198,8 +203,6 @@ export const userSchema = new mongoose.Schema(
 	},
 );
 
-type UserModel = mongoose.InferSchemaType<typeof userSchema>;
-
-const userModel = mongoose.model<UserModel>("Users", userSchema);
+const userModel = mongoose.model<UserType>("Users", userSchema);
 
 export default userModel;

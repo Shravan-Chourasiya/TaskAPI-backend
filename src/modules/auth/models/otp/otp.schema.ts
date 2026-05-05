@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import type { OtpType } from "../../Types/mongo_models/otp.type.js";
 
 export const otpSchema = new mongoose.Schema(
 	{
@@ -89,7 +90,6 @@ export const otpSchema = new mongoose.Schema(
 	},
 );
 
-type OTPModelType = mongoose.InferSchemaType<typeof otpSchema>;
-const OtpModel = mongoose.model<OTPModelType>("OTPs", otpSchema);
+const OtpModel = mongoose.model<OtpType>("OTPs", otpSchema);
 
 export default OtpModel;

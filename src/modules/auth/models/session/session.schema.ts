@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import type { SessionType } from "../../Types/mongo_models/session.type.js";
 
 export const sessionSchema = new mongoose.Schema(
 	{
@@ -95,9 +96,8 @@ export const sessionSchema = new mongoose.Schema(
 	},
 );
 
-type SessionModelType = mongoose.InferSchemaType<typeof sessionSchema>;
 
-const sessionModel = mongoose.model<SessionModelType>(
+const sessionModel = mongoose.model<SessionType>(
 	"Sessions",
 	sessionSchema,
 );

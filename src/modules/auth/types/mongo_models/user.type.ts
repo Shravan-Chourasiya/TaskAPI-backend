@@ -1,0 +1,47 @@
+export type UserType = {
+	username: string;
+	email: string;
+	passwordHash: string;
+	status: "active" | "unverified" | "suspended" | "deleted";
+	isVerified: boolean;
+	verifiedAt: Date;
+	verificationToken: string;
+	verificationTokenExpiry: Date;
+	lastPassword: string;
+	lastPasswordChangedAt: Date;
+	failedLoginAttempts: number;
+	accountLockedUntil: Date;
+	lastFailedLoginAt: Date;
+	LastLoginAt: Date;
+	loginCount: number;
+	lastLoginDevice: {
+		deviceIP: string;
+		userAgent: string;
+		deviceType: string;
+		browser: string;
+		os: string;
+		deviceId: string;
+	};
+	activeSessions: number;
+	laastActiveAt: Date;
+	profile: {
+		firstName: string;
+		lastName: string;
+		avatarUrl: string;
+		bio: string;
+		phone: string;
+		phoneVerified: boolean;
+		country: string;
+	};
+	roles: "user" | "admin" | "moderator" | "developer";
+	isDeleted: boolean;
+	deletedAt: Date;
+	scheduledDeletionAt: Date;
+	deletedBy: string;
+	is2FAEnabled: boolean;
+	twoFASecret: string;
+	twoFA_Options: "email" | "sms" | "authenticator";
+	isBlackListed: boolean;
+	blackListReason: string;
+	blackListedAt: Date;
+};
