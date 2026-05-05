@@ -3,6 +3,7 @@ import * as authControllers from "../modules/auth/controllers/auth.controller.js
 import {
 	accessTokenHandler,
 	refreshTokenHandler,
+	strictAuthHandler,
 } from "../middlewares/tokenhandler.middleware.js";
 import { ZodValidatorMiddleware } from "../middlewares/zodvalidation.middleware.js";
 import {
@@ -49,14 +50,14 @@ router.patch(
 router.delete(
 	"/account/delete",
 	ZodValidatorMiddleware(loginDeleteRecoverAccSchema),
-	accessTokenHandler,
+	strictAuthHandler,
 	authControllers.deleteAccountController,
 );
 
 router.patch(
 	"/account/recover",
 	ZodValidatorMiddleware(loginDeleteRecoverAccSchema),
-	refreshTokenHandler,
+	strictAuthHandler,
 	authControllers.recoverDeletedAccountController,
 );
 

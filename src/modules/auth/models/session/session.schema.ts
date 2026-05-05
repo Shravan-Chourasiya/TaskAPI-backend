@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import type { SessionType } from "../../Types/mongo_models/session.type.js";
+import type { SessionType, SessionStaticMethods, SessionInstanceMethods } from "../../Types/mongo_models/session.type.js";
 
 export const sessionSchema = new mongoose.Schema(
 	{
@@ -96,8 +96,11 @@ export const sessionSchema = new mongoose.Schema(
 	},
 );
 
+// Import methods to attach to schema
+import "./session.methods.js";
+import "./session.indexes.virtual.middleware.js";
 
-const sessionModel = mongoose.model<SessionType>(
+const sessionModel = mongoose.model<SessionType, SessionStaticMethods>(
 	"Sessions",
 	sessionSchema,
 );

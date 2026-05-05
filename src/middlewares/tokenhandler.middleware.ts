@@ -1,66 +1,170 @@
 import type { NextFunction, Request, Response } from "express";
-import { sessionModel } from "../modules/auth/models/session/session.schema.js";
+import sessionModel from "../modules/auth/models/session/session.schema.js";
 import jwt, { type JwtPayload } from "jsonwebtoken";
 import { config } from "../configs/app.config.js";
 import bcrypt from "bcryptjs";
+import { asyncErrorHandler } from "../modules/auth/utils/asynchandler.utils.js";
 
 type RequestWithUser = Request & {
 	userID?: string;
+	sessionId?: string;
 };
 
-export async function accessTokenHandler(
-	req: RequestWithUser,
-	res: Response,
-	next: NextFunction,
-) {
-	if (!req.cookies.acToken || req.cookies.acToken === "") {
-		return res.status(401).json({
-			message: "Unauthorized | Access Token Not found!.",
-		});
-	} else {
-		const decoded = jwt.verify(
-			req.cookies.acToken,
-			config.JWT_SECRET_2,
-		) as JwtPayload;
-		req.userID = decoded.id;
-		next();
-	}
-}
+/**
+ * Verify access token from cookies
+ * Lightweight check - only validates JWT signature and expiry
+ */
+export const accessTokenHandler = asyncErrorHandler(
+	async (req: RequestWithUser, res: Response, next: NextFunction) => {
+		const accessToken = req.cookies.acToken;
 
-export async function refreshTokenHandler(
-	req: RequestWithUser,
-	res: Response,
-	next: NextFunction,
-) {
-	if (!req.cookies.rfToken || req.cookies.rfToken === "") {
-		return res.status(400).json({
-			message: "Invalid Request | Refresh Token Not found!.",
+		if (!accessToken) {
+			return res.status(401).json({
+				success: false,
+				error: "Unauthorized",
+				message: "Access token not found",
+			});
+		}
+
+		// Verify JWT signature and expiry (throws error if invalid)
+		const decoded = jwt.verify(accessToken, config.JWT_SECRET_2) as JwtPayload;
+
+		// Attach userID to request for downstream use
+		req.userID = decoded.id;
+		req.sessionId = decoded.sessionId; // Optional: if you include sessionId in JWT
+
+		next();
+	},
+);
+
+/**
+ * Verify refresh token and check session validity
+ * Heavy check - validates JWT + database session + token family
+ */
+export const refreshTokenHandler = asyncErrorHandler(
+	async (req: RequestWithUser, res: Response, next: NextFunction) => {
+		const refreshToken = req.cookies.rfToken;
+
+		if (!refreshToken) {
+			return res.status(401).json({
+				success: false,
+				error: "Unauthorized",
+				message: "Refresh token not found",
+			});
+		}
+
+		// 1. Verify JWT signature and expiry
+		const decoded = jwt.verify(refreshToken, config.JWT_SECRET) as JwtPayload;
+
+		// 2. Find active session in database
+		const session = await sessionModel
+			.findOne({
+				userId: decoded.id,
+				status: "active",
+				isRevoked: false,
+			})
+			.select("+refreshTokenHash"); // Include select: false field
+
+		if (!session) {
+			return res.status(401).json({
+				success: false,
+				error: "SessionNotFound",
+				message: "Session not found or revoked",
+			});
+		}
+
+		// 3. Verify refresh token hash
+		const isTokenValid = await bcrypt.compare(
+			refreshToken,
+			session.refreshTokenHash,
+		);
+
+		if (!isTokenValid) {
+			return res.status(401).json({
+				success: false,
+				error: "InvalidToken",
+				message: "Invalid refresh token",
+			});
+		}
+
+		// 4. Check token family (theft detection)
+		if (decoded.tokenFamily && decoded.tokenFamily !== session.tokenFamily) {
+			// Token family mismatch = token theft detected
+			console.warn(
+				`⚠️ Token theft detected for user ${decoded.id}. Revoking all sessions.`,
+			);
+
+			// Revoke all user sessions ("lose 1, lose all")
+			await sessionModel.revokeAllUserSessions(
+				decoded.id,
+				"Token theft detected",
+			);
+
+			return res.status(401).json({
+				success: false,
+				error: "TokenTheftDetected",
+				message: "Security alert: All sessions revoked. Please login again.",
+			});
+		}
+
+		// 5. Check session expiry
+		if (session.refreshTokenExpiresAt < new Date()) {
+			await session.revoke("Token expired");
+
+			return res.status(401).json({
+				success: false,
+				error: "TokenExpired",
+				message: "Refresh token expired",
+			});
+		}
+
+		// 6. Update last activity
+		await session.updateActivity();
+
+		// Attach to request
+		req.userID = decoded.id;
+		req.sessionId = session._id.toString();
+
+		next();
+	},
+);
+
+/**
+ * Strict middleware that checks both access token AND session validity
+ * Use for sensitive operations (delete account, change password, etc.)
+ */
+export const strictAuthHandler = asyncErrorHandler(
+	async (req: RequestWithUser, res: Response, next: NextFunction) => {
+		const accessToken = req.cookies.acToken;
+
+		if (!accessToken) {
+			return res.status(401).json({
+				success: false,
+				error: "Unauthorized",
+				message: "Access token required",
+			});
+		}
+
+		const decoded = jwt.verify(accessToken, config.JWT_SECRET_2) as JwtPayload;
+
+		// Verify session still exists and is active
+		const session = await sessionModel.findOne({
+			userId: decoded.id,
+			status: "active",
+			isRevoked: false,
 		});
-	}
-	const decoded = jwt.verify(
-		req.cookies.rfToken,
-		config.JWT_SECRET,
-	) as JwtPayload;
-	const rfTokenRecord = await sessionModel.findOne({
-		userId: decoded.id,
-		userIP: decoded.ip,
-		userAgents: decoded.ua,
-		isRevoked: false,
-	});
-	const refreshTokenFromDB = String(rfTokenRecord?.refreshToken);
-	const isRfTokenValid = bcrypt.compareSync(
-		req.cookies.rfToken,
-		refreshTokenFromDB,
-	);
-	if (!isRfTokenValid || !rfTokenRecord) {
-		return res.status(401).json({
-			message: "Unauthorized | Invalid Refresh Token!.",
-		});
-	}
-	if (rfTokenRecord.expiresAt < new Date()) {
-		return res.status(401).json({
-			message: "Unauthorized | Refresh Token Expired!.",
-		});
-	}
-	next();
-}
+
+		if (!session) {
+			return res.status(401).json({
+				success: false,
+				error: "SessionInvalid",
+				message: "Session expired or revoked",
+			});
+		}
+
+		req.userID = decoded.id;
+		req.sessionId = session._id.toString();
+
+		next();
+	},
+);

@@ -7,7 +7,6 @@ import cookieParser from "cookie-parser";
 import morgan from "morgan";
 import dbConnect from "./configs/mongodb.init.js";
 import { config } from "./configs/app.config.js";
-import { classifyError } from "./middlewares/errorhandler.middleware.js";
 import cors from "cors";
 import { authRouter } from "./routes/auth.routes.js";
 import { apiRateLimiter } from "./middlewares/ratelimiting.middleware.js";
@@ -28,9 +27,5 @@ app.use(cors(corsOptions));
 
 app.use("/api/v1/auth",apiRateLimiter, authRouter);
 
-app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
-	const { status, message } = classifyError(err);
-	res.status(status).json({ error: message });
-});
 
 export { app };

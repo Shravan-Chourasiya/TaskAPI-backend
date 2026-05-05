@@ -1,4 +1,7 @@
 // ============ INSTANCE METHODS ============
+
+import { sessionSchema } from "./session.schema.js";
+
 /**
  * Revoke a session and mark it as revoked.
  * @param {string} [reason] - Optional reason for revocation
@@ -7,6 +10,7 @@ sessionSchema.methods.revoke = async function (reason?: string): Promise<void> {
 	this.isRevoked = true;
 	this.status = "revoked";
 	this.revokedAt = new Date();
+	this.revocationReason = reason;
 	await this.save();
 };
 
@@ -62,7 +66,7 @@ sessionSchema.statics.revokeAllUserSessions = async function (
 			isRevoked: true,
 			status: "revoked",
 			revokedAt: new Date(),
-			
+			revocationReason: reason,
 		},
 	);
 };
