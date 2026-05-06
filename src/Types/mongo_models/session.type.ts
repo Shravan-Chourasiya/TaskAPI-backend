@@ -3,12 +3,7 @@ import type { Model, Document } from "mongoose";
 export type SessionType = {
 	userId: string;
 	deviceId: string;
-	deviceInfo: {
-		userAgent: string;
-		deviceType: "mobile" | "tablet" | "desktop";
-		browser: string;
-		os: string;
-	};
+	userAgent: string;
 	ipAddress: string;
 	ipCountry?: string;
 	ipRegion?: string;
@@ -32,7 +27,11 @@ export interface SessionInstanceMethods {
 }
 
 // Static methods interface
-export interface SessionStaticMethods extends Model<SessionType, object, SessionInstanceMethods> {
+export interface SessionStaticMethods extends Model<
+	SessionType,
+	object,
+	SessionInstanceMethods
+> {
 	findActiveSessions(userId: string): Promise<SessionDocument[]>;
 	revokeAllUserSessions(userId: string, reason?: string): Promise<void>;
 	findByTokenFamily(tokenFamily: string): Promise<SessionDocument[]>;
@@ -40,4 +39,6 @@ export interface SessionStaticMethods extends Model<SessionType, object, Session
 }
 
 // Combined document type
-export type SessionDocument = Document<unknown, object, SessionType> & SessionType & SessionInstanceMethods;
+export type SessionDocument = Document<unknown, object, SessionType> &
+	SessionType &
+	SessionInstanceMethods;

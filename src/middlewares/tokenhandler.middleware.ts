@@ -3,7 +3,7 @@ import sessionModel from "../modules/auth/models/session/session.schema.js";
 import jwt, { type JwtPayload } from "jsonwebtoken";
 import { config } from "../configs/app.config.js";
 import bcrypt from "bcryptjs";
-import { asyncErrorHandler } from "../modules/auth/utils/asynchandler.utils.js";
+import { asyncErrorHandler } from "../utils/asynchandler.utils.js";
 
 type RequestWithUser = Request & {
 	userID?: string;

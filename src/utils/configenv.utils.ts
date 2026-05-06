@@ -23,6 +23,6 @@ export function getCookieVar(name: string): object {
 		val.expires = new Date(Date.now() + val.maxAge);
 		return val;
 	} catch (error) {
-		throw new Error(`Invalid JSON in environment variable: ${name}`);
+		throw new Error(`Invalid JSON in environment variable: ${name} - ${error}`);
 	}
 }

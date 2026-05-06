@@ -12,8 +12,12 @@ import {
 	otpSchema,
 	registerSchema,
 	updateDetailsSchema,
-} from "../libs/zodschemas.js";
-import { authRateLimiter, otpGenerationLimiter, otpVerificationLimiter } from "../middlewares/ratelimiting.middleware.js";
+} from "../libs/zod/auth.zodschema.js";
+import {
+	authRateLimiter,
+	otpGenerationLimiter,
+	otpVerificationLimiter,
+} from "../middlewares/ratelimiting.middleware.js";
 
 const router = express.Router();
 

@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import type { OtpType } from "../../Types/mongo_models/otp.type.js";
+import type { OtpType } from "../../../../Types/mongo_models/otp.type.js";
 
 export const otpSchema = new mongoose.Schema(
 	{
@@ -23,8 +23,6 @@ export const otpSchema = new mongoose.Schema(
 			trim: true,
 			index: true,
 		},
-
-
 
 		otpHash: {
 			type: String,
@@ -57,9 +55,6 @@ export const otpSchema = new mongoose.Schema(
 			default: false,
 			index: true,
 		},
-		
-
-
 
 		usedAt: Date,
 
@@ -76,13 +71,10 @@ export const otpSchema = new mongoose.Schema(
 
 		lastAttemptAt: Date,
 
-
-
 		expiresAt: {
 			type: Date,
 			required: true,
 		},
-	
 	},
 	{
 		timestamps: true,
@@ -90,6 +82,6 @@ export const otpSchema = new mongoose.Schema(
 	},
 );
 
-const OtpModel = mongoose.model<OtpType>("OTPs", otpSchema);
+const otpModel = mongoose.model<OtpType>("OTPs", otpSchema);
 
-export default OtpModel;
+export default otpModel;

@@ -1,15 +1,13 @@
 import type { NextFunction, Request, Response } from "express";
 import jwt, { type JwtPayload } from "jsonwebtoken";
 import { config } from "../../../configs/app.config.js";
-import { OtpModel } from "../models/otp.model.js";
 import bcrypt from "bcryptjs";
-import { userModel } from "../models/users/user.schema.js";
-import { generateOTP, getOtpHTML } from "../../../utils/email.utils.js";
-import { sendVerificationEmail } from "../../../services/nodemailer.service.js";
-import type { UserModel } from "../Types/dbmodel.interface.js";
-import type { emailSchema, passwordSchema } from "../../../libs/zodschemas.js";
+import type {
+	emailSchema,
+	passwordSchema,
+} from "../../../libs/zod/auth.zodschema.js";
 import * as z from "zod";
-import e from "express";
+import otpModel from "../models/otp/otp.schema.js";
 
 export const EmailVerificationHandler =
 	(otp: string) => async (req: Request, res: Response, next: NextFunction) => {
@@ -18,7 +16,7 @@ export const EmailVerificationHandler =
 			config.JWT_SECRET,
 		) as JwtPayload;
 		try {
-			const otpRecord = await OtpModel.findOne({
+			const otpRecord = await otpModel.findOne({
 				userId: decoded.id,
 				purpose: "verifyEmailOR",
 				isUsed: false,

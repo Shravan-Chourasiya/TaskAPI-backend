@@ -4,7 +4,7 @@ import { sessionSchema } from "./session.schema.js";
 sessionSchema.index({ userId: 1, deviceId: 1 });
 sessionSchema.index({ userId: 1, tokenFamily: 1 });
 sessionSchema.index({ deviceId: 1, isRevoked: 1 });
-sessionSchema.index({ deviceId: 1, tokenFamily: 1 });
+sessionSchema.index({ userId: 1, deviceId: 1, isRevoked: 1 });
 sessionSchema.index({ userId: 1, lastActivityAt: 1 });
 
 // TTL Index for expired refresh tokens

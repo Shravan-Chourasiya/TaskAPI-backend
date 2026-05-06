@@ -1,11 +1,8 @@
-import { userModel } from "../models/users/user.schema.js";
 import jwt, { type JwtPayload } from "jsonwebtoken";
 import bcrypt from "bcryptjs";
-import { sessionModel } from "../models/session/session.schema.js";
 import { config } from "../../../configs/app.config.js";
 import { generateOTP, getOtpHTML } from "../../../utils/email.utils.js";
 import { sendVerificationEmail } from "../../../services/nodemailer.service.js";
-import { OtpModel, OtpModel as otpModel } from "../models/otp.model.js";
 import type { NextFunction, Request, Response } from "express";
 import {
 	AccountRecoveryHandler,
@@ -15,28 +12,47 @@ import {
 	ResetPasswordHandler,
 } from "../utils/authcontroller.utils.js";
 import * as z from "zod";
-import type { usernameSchema } from "../../../libs/zodschemas.js";
+import crypto from "crypto";
+import type {
+	loginDeleteRecoverAccSchema,
+	registerSchema,
+	usernameSchema,
+} from "../../../libs/zod/auth.zodschema.js";
+import userModel from "../models/users/user.schema.js";
+import otpModel from "../models/otp/otp.schema.js";
+import { otpService } from "../../../services/redisotp.service.js";
+import sessionModel from "../models/session/session.schema.js";
 
 export async function registerController(
 	req: Request,
 	res: Response,
 	next: NextFunction,
 ) {
-	const { username, email, password } = req.body;
+	const { username, email, password }: z.infer<typeof registerSchema> =
+		req.body;
+	const session = await userModel.db.startSession();
 	try {
-		const existingUser = await userModel.findOne({ email, isVerified: true });
+		session.startTransaction();
+
+		const existingUser = await userModel.findOne(
+			{ email, isVerified: true },
+			{ session },
+		);
 		if (existingUser) {
 			return res
 				.status(409)
 				.json({ message: "Email Already In Use.Go to Login" });
 		}
-		const existingUnverifiedUser = await userModel.findOne({
-			email,
-			isVerified: false,
-		});
+		const existingUnverifiedUser = await userModel.findOne(
+			{
+				email,
+				isVerified: false,
+			},
+			{ session },
+		);
+
 		if (existingUnverifiedUser) {
 			const emailSubject = "verifyEmailOR";
-
 			const otp = generateOTP();
 			const html = getOtpHTML(otp, "resend_otp");
 
@@ -51,42 +67,42 @@ export async function registerController(
 					message: "Failed to send OTP email. Please try again later.",
 				});
 			}
-			const otpHash = await bcrypt.hash(otp, 12);
 
-			const otpObject = await OtpModel.create({
-				userId: existingUnverifiedUser._id,
-				otp: otpHash,
-				email: existingUnverifiedUser.email,
-				purpose: emailSubject,
-			});
+			const otpStoreSuccess = await otpService.storeOTP(
+				email,
+				otp,
+				"verifyEmailOR",
+				existingUnverifiedUser._id.toString(),
+			);
+
+			if (!otpStoreSuccess) {
+				return res.status(503).json({
+					message: "Failed to store OTP. Please try again later.",
+				});
+			}
 			return res.status(409).json({
 				message:
 					"Email Already Registered but not verified! Verification OTP sent to your email . Verify Email and complete registration!",
 			});
 		}
-		const hashedPass = await bcrypt.hash(password, 12);
-		const user = await userModel.create({
-			username,
-			email,
-			password: hashedPass,
-		});
 
+		const user = await userModel.create(
+			[
+				{
+					username,
+					email,
+					passwordHash: password,
+				},
+			],
+			{ session },
+		);
 		if (!user) {
 			return res.status(503).json({
 				message: "User Not Registered.Please try again Later!",
 			});
 		}
-		const tempToken = jwt.sign({ id: user._id }, config.JWT_SECRET, {
-			expiresIn: "10m",
-		});
-
-		res.cookie("tempToken", tempToken, {
-			...config.COOKIE_CONF_TT,
-			maxAge: 10 * 60 * 1000,
-		});
 		const otp = generateOTP();
 		const html = getOtpHTML(otp, "verifyEmailOR");
-
 		const mailSuccess = await sendVerificationEmail(
 			config.GMAIL_USER_EMAIL as string,
 			email,
@@ -94,26 +110,38 @@ export async function registerController(
 			html,
 		);
 		if (!mailSuccess) {
-			await user.deleteOne();
 			return res.status(503).json({
 				message:
 					"Failed to send verification email. Please try registering again later.",
 			});
 		}
-		const otpHash = await bcrypt.hash(otp, 12);
-		const otpObject = await otpModel.create({
-			userId: user._id,
-			otp: otpHash,
-			email: user.email,
-			purpose: "verifyEmailOR",
-		});
+		const otpStoreSuccess = await otpService.storeOTP(
+			email,
+			otp,
+			"verifyEmailOR",
+			user[0]?._id.toString(),
+		);
+		if (!otpStoreSuccess) {
+			return res.status(503).json({
+				message: "Failed to store OTP. Please try again later.",
+			});
+		}
+
+		await session.commitTransaction();
 
 		return res.status(201).json({
 			message:
 				"User Registered Successfully! Verification OTP sent to your email . Verify Email and complete registration!",
 		});
 	} catch (error) {
+		if (session) {
+			await session.abortTransaction();
+		}
 		next(error);
+	} finally {
+		if (session) {
+			await session.endSession();
+		}
 	}
 }
 
@@ -122,62 +150,126 @@ export async function loginController(
 	res: Response,
 	next: NextFunction,
 ) {
+	const { email, password }: z.infer<typeof loginDeleteRecoverAccSchema> = req.body;
+	const Session = await userModel.db.startSession();
 	try {
-		const { usernameORemail, password } = req.body;
-		const isUser = await userModel.findOne({
-			$or: [{ username: usernameORemail }, { email: usernameORemail }],
-		});
+		if(req.cookies.acToken){
+			return res.status(400).json({
+				message: "Already Logged In! Please Logout from current session to login again!",
+			});
+		}
+		Session.startTransaction();
+
+		const isUser = await userModel.findOne({ email }, { session: Session }).select("+passwordHash");
 		if (!isUser) {
 			return res.status(404).json({ message: "User Not Found!" });
 		}
-		const isPasswordCorrect = await bcrypt.compare(password, isUser.password);
+
+		const isPasswordCorrect = await isUser.comparePassword(password);
 		if (!isPasswordCorrect) {
 			return res.status(403).json({ message: "Invalid Password.Try Again!" });
 		}
+
 		if (!isUser.isVerified) {
-			return res
-				.status(403)
-				.json({ message: "User Not verified.Verify Your Email!" });
+			return res.status(403).json({
+				message:
+					"Email Not Verified! Verification OTP sent to your email . Verify Email and complete registration!",
+			});
 		}
+
 		if (isUser.isDeleted) {
 			return res.status(403).json({
 				message:
-					"Account Scheduled for Deletion! Complete Account Recovery Procedure within 30 days to recover your account!",
+					"Account Scheduled for Deletion! Complete Account Recovery Procedure to recover your account!",
 			});
 		}
+
+		// Generate consistent deviceId from user agent
+		const deviceId = crypto.createHash("sha256")
+			.update(req.headers["user-agent"] || "unknown")
+			.digest("hex");
+
+		const tokenFamily = crypto.randomBytes(16).toString("hex");
+
 		const refreshToken = jwt.sign(
-			{ id: isUser._id, ip: req.ip, ua: req.headers["user-agent"] },
-			config.JWT_SECRET,
+			{
+				id: isUser._id,
+				tokenFamily: tokenFamily,
+				deviceId: deviceId,
+				type: "refresh",
+			},
+			config.REFRESH_TOKEN_JWT_SECRET,
 			{
 				expiresIn: "7d",
 			},
 		);
-		const accessToken = jwt.sign(
-			{ id: isUser._id, email: isUser.email },
-			config.JWT_SECRET_2,
-			{ expiresIn: 600 },
-		);
-		const rfTokenHash = await bcrypt.hash(refreshToken, 12);
-		const existingSession = await sessionModel
-			.find({ userId: isUser._id, isRevoked: false })
-			.sort({ createdAt: 1 });
-		if (existingSession.length >= 5) {
-			const oldestSession = existingSession[0];
-			await sessionModel.deleteOne({ _id: oldestSession?._id });
-			return res.status(403).json({
-				message:
-					"Maximum Session Limit Reached! Logged Out from Oldest Session!",
-			});
-		}
-		const session = await sessionModel.create({
-			userId: isUser._id,
-			userIP: req.ip || "unknown",
-			userAgents: req.headers["user-agent"] || "unknown",
-			refreshToken: rfTokenHash,
-		});
 
-		res.cookie("rfToken", refreshToken, config.COOKIE_CONF_RT);
-		res.cookie("acToken", accessToken, config.COOKIE_CONF_AT);
+		const accessToken = jwt.sign(
+			{ id: isUser._id ,type: "access"},
+			config.ACCESS_TOKEN_JWT_SECRET,
+			{ expiresIn: "10m" },
+		);
+
+		const rfTokenHash = await bcrypt.hash(refreshToken, 12);
+	const acTokenHash = await bcrypt.hash(accessToken, 12);
+
+		// Check if session exists for this device
+		const existingSession = await sessionModel.findOne({
+			userId: isUser._id.toString(),
+			deviceId: deviceId,
+		}, { session: Session });
+	
+		if(existingSession){
+		
+			await existingSession.updateOne({
+				accessTokenHash: acTokenHash,
+				refreshTokenHash: rfTokenHash,
+				tokenFamily,
+				isRevoked: false,
+				status: "active",
+				lastActivityAt: new Date(),
+				refreshTokenExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+			}, { session: Session });
+		} else {
+			const activeSessionCount = await sessionModel.countDocuments({
+				userId: isUser._id.toString(),
+				isRevoked: false,
+			}, { session: Session });
+
+			if (activeSessionCount >= 5) {
+				return res.status(403).json({
+					message: "Maximum 5 devices allowed. Logout from another device first.",
+				});
+			}
+
+			const newSession = await sessionModel.create([{
+				userId: isUser._id.toString(),
+				deviceId: deviceId,
+				userAgent: req.headers["user-agent"] || "unknown",
+				ipAddress: req.ip || "unknown",
+				ipCountry: req.headers["cf-ipcountry"]?.toString() || "unknown",
+				ipRegion: req.headers["cf-ipregion"]?.toString() || "unknown",
+				ipCity: req.headers["cf-ipcity"]?.toString() || "unknown",
+				tokenFamily,
+				refreshTokenHash: rfTokenHash,
+				accessTokenHash: acTokenHash,
+				isRevoked: false,
+				status: "active",
+				lastActivityAt:new Date(),
+				refreshTokenExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+			}], { session: Session });
+
+			if (!newSession) {
+				return res.status(503).json({
+					message: "Failed to create session. Please try again later.",
+				});
+			}
+		}
+
+		await Session.commitTransaction();
+
+		res.cookie("rfToken", refreshToken, config.REFRESH_TOKEN_COOKIE_CONFIG);
+		res.cookie("acToken", accessToken, config.ACCESS_TOKEN_COOKIE_CONFIG);
 		return res.status(200).json({
 			message: "User Logged in successfully!",
 			data: {
@@ -186,7 +278,14 @@ export async function loginController(
 			},
 		});
 	} catch (error) {
+		if (Session) {
+			await Session.abortTransaction();
+		}
 		next(error);
+	}finally{
+		if(Session){
+			await Session.endSession();
+		}
 	}
 }
 
@@ -261,42 +360,52 @@ export async function logoutController(
 	res: Response,
 	next: NextFunction,
 ) {
+	const Session = await userModel.db.startSession();
 	try {
-		const rfToken = req.cookies.rfToken;
-		if (!rfToken) {
+		Session.startTransaction();
+
+		const acToken = req.cookies.acToken;
+		if (!acToken) {
 			return res.status(400).json({
-				message: "Refresh Token Not Found !",
+				message: "Access Token Not Found !",
 			});
 		}
-		const rfTokenDecoded = jwt.verify(rfToken, config.JWT_SECRET) as JwtPayload;
+		const acTokenDecoded = jwt.verify(acToken, config.ACCESS_TOKEN_JWT_SECRET) as JwtPayload;
 		const session = await sessionModel.findOne({
-			userId: rfTokenDecoded.id,
-			userIP: rfTokenDecoded.ip,
-			userAgents: rfTokenDecoded.ua,
+			userId: acTokenDecoded.id,
 			isRevoked: false,
-		});
+		},{ session: Session }).select("+accessTokenHash");
 		if (!session) {
 			return res.status(400).json({
-				message: "Refresh token is invalid or revoked",
+				message: "Access token is invalid or revoked | Session not found",
 			});
 		}
-		const isRfTokenCorrect = await bcrypt.compare(
-			rfToken,
-			session.refreshToken,
+		const isAcTokenCorrect = await bcrypt.compare(
+			acToken,
+			session.accessTokenHash,
 		);
-		if (!isRfTokenCorrect) {
+		if (!isAcTokenCorrect) {
 			return res.status(400).json({
-				message: "Refresh token is invalid or revoked",
+				message: "Access token is invalid or revoked",
 			});
 		}
-		await session.updateOne({ isRevoked: true });
-		res.clearCookie("rfToken", config.COOKIE_CONF_RT);
-		res.clearCookie("acToken", config.COOKIE_CONF_AT);
+		await session.updateOne({ isRevoked: true }, { session: Session });
+
+		await Session.commitTransaction();
+		res.clearCookie("rfToken", config.REFRESH_TOKEN_COOKIE_CONFIG);
+		res.clearCookie("acToken", config.ACCESS_TOKEN_COOKIE_CONFIG);
 		res.status(200).json({
 			message: "User Logged Out Successfully !",
 		});
 	} catch (error) {
+		if (Session) {
+			await Session.abortTransaction();
+		}
 		next(error);
+	} finally {
+		if (Session) {
+			await Session.endSession();
+		}
 	}
 }
 

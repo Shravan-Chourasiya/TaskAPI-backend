@@ -1,5 +1,4 @@
 import bcrypt from "bcryptjs";
-import crypto from "crypto";
 import { userSchema } from "./user.schema.js";
 
 // Indexs for efficient querying
@@ -45,26 +44,24 @@ userSchema.virtual("accountAge").get(function () {
 
 // ============ MIDDLEWARE ============
 // Pre-save: Hash password if modified
-userSchema.pre("save", async function (next) {
-	if (!this.isModified("password")) return next;
+userSchema.pre("save", async function () {
+	if (!this.isModified("password")){ return ;};
 
 	// Hash new password
-	this.password = await bcrypt.hash(this.password, 12);
+	this.passwordHash = await bcrypt.hash(this.passwordHash, 12);
 	this.lastPasswordChangedAt = new Date();
-	next;
 });
 
 // Pre-save: Update verification status
-userSchema.pre("save", function (next) {
+userSchema.pre("save", function () {
 	if (this.isModified("isVerified") && this.isVerified && !this.verifiedAt) {
 		this.verifiedAt = new Date();
 		this.status = "active";
 	}
-	next;
 });
 
 // Pre-save: Set scheduled deletion date
-userSchema.pre("save", function (next) {
+userSchema.pre("save", function () {
 	if (
 		this.isModified("isDeleted") &&
 		this.isDeleted &&
@@ -73,6 +70,5 @@ userSchema.pre("save", function (next) {
 		this.deletedAt = new Date();
 		this.scheduledDeletionAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
 		this.status = "deleted";
-	}
-	next;
+	};
 });

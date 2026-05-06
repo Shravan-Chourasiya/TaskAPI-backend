@@ -1,5 +1,8 @@
 import mongoose from "mongoose";
-import type { SessionType, SessionStaticMethods, SessionInstanceMethods } from "../../Types/mongo_models/session.type.js";
+import type {
+	SessionType,
+	SessionStaticMethods,
+} from "../../../../Types/mongo_models/session.type.js";
 
 export const sessionSchema = new mongoose.Schema(
 	{
@@ -16,14 +19,9 @@ export const sessionSchema = new mongoose.Schema(
 			index: true,
 		},
 
-		deviceInfo: {
-			userAgent: String,
-			deviceType: {
-				type: String,
-				enum: ["mobile", "tablet", "desktop"],
-			},
-			browser: String,
-			os: String,
+		userAgent: {
+			type: String,
+			required: [true, "User agent is required"],
 		},
 
 		ipAddress: {
@@ -31,11 +29,17 @@ export const sessionSchema = new mongoose.Schema(
 			required: [true, "IP address is required"],
 		},
 
-		ipCountry: String,
+		ipCountry: {
+			type: String,
+		},
 
-		ipRegion: String,
+		ipRegion: {
+			type: String,
+		},
 
-		ipCity: String,
+		ipCity: {
+			type: String,
+		},
 
 		// ============ TOKEN HASHES (Audit Trail Only) ============
 		accessTokenHash: {
@@ -72,23 +76,17 @@ export const sessionSchema = new mongoose.Schema(
 		},
 
 		revokedAt: Date,
-		
+
 		lastActivityAt: {
 			type: Date,
 			default: () => new Date(),
 			index: true,
 		},
 
-		accessTokenExpiresAt: {
+		refreshTokenExpiresAt: {
 			type: Date,
 			required: true,
 		},
-
-		refreshTokenExpiresAt: {
-			type: Date,
-			required: true
-		},
-		
 	},
 	{
 		timestamps: true,

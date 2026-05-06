@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import type { UserType } from "../../Types/mongo_models/user.type.js";
+import type { UserType, UserStaticMethods } from "../../../../Types/mongo_models/user.type.js";
 
 export const userSchema = new mongoose.Schema(
 	{
@@ -87,7 +87,7 @@ export const userSchema = new mongoose.Schema(
 
 		lastLoginDevice: {
 			type: [
-				{	
+				{
 					deviceIP: String,
 					userAgent: String,
 					deviceType: String,
@@ -140,7 +140,7 @@ export const userSchema = new mongoose.Schema(
 			country: {
 				type: String,
 				trim: true,
-				maxlength: [100, "Country name cannot exceed 100 characters"]
+				maxlength: [100, "Country name cannot exceed 100 characters"],
 			},
 		},
 
@@ -203,6 +203,9 @@ export const userSchema = new mongoose.Schema(
 	},
 );
 
-const userModel = mongoose.model<UserType>("Users", userSchema);
+// Import methods before creating model
+import "./user.methods.js";
+
+const userModel = mongoose.model<UserType, UserStaticMethods>("Users", userSchema);
 
 export default userModel;
