@@ -7,11 +7,13 @@ interface PendingOTP {
 	email: string;
 	userId: string | undefined;
 	purpose: string;
+	newValue: string|undefined;
 	attemptsLeft: number;
 	failedAttempts: number;
 	createdAt: number;
 	expiresAt: number;
 }
+
 
 export const otpService = {
 	/**
@@ -27,16 +29,21 @@ export const otpService = {
 		otp: string,
 		purpose: string,
 		userId?: string,
+		newValue?: string,
 		ttl: number = 600,
-	): Promise<boolean> {
+	): Promise<{ success: boolean; message?: string }> {
+		const otpExists = await this.otpExists(email, purpose);
+		if (otpExists) {
+			await this.invalidateOTP(email, purpose); // Invalidate existing OTP for the same purpose
+		}
 		const otpHash = await bcrypt.hash(otp, 12);
 		const key = `otp:${email.toLowerCase()}:${purpose}`;
-
 		const data: PendingOTP = {
 			otpHash,
 			email: email.toLowerCase(),
 			userId,
 			purpose,
+			newValue,
 			attemptsLeft: 5,
 			failedAttempts: 0,
 			createdAt: Date.now(),
@@ -48,7 +55,7 @@ export const otpService = {
 		console.warn(
 			`OTP stored for ${email} with purpose ${purpose} (expires in ${ttl} seconds)`,
 		);
-		return true
+		return { success: true };
 	},
 
 	/**
@@ -62,7 +69,7 @@ export const otpService = {
 		email: string,
 		otp: string,
 		purpose: string,
-	): Promise<{ success: boolean; message: string; userId?: string }> {
+	): Promise<{ success: boolean; message: string; userId?: string ,newValue?: string}> {
 		const key = `otp:${email.toLowerCase()}:${purpose}`;
 		const data = await redisClient.get(key);
 
@@ -129,7 +136,7 @@ export const otpService = {
 				message: `Invalid OTP. ${otpData.attemptsLeft} attempts remaining.`,
 			};
 		}
-
+		const otpNewValue = otpData.newValue?.toString() || "";
 		// OTP verified successfully - delete from Redis
 		await redisClient.del(key);
 
@@ -138,10 +145,12 @@ export const otpService = {
 				success: true,
 				message: "OTP verified successfully",
 				userId: otpData.userId,
+				newValue: otpNewValue,
 			}
 			: {
 				success: true,
 				message: "OTP verified successfully",
+				newValue: otpNewValue,
 			};
 	},
 

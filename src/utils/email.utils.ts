@@ -23,12 +23,12 @@ export function getOtpHTML(otp: string, purpose: string) {
 			actionText = "Reset Password";
 			purposeAbb = "re-pa";
 			break;
-		case "account_recovery":
+		case "accountRecovery":
 			purposeDescription = "recover your account.";
 			actionText = "Recover Account";
 			purposeAbb = "ac-re";
 			break;
-		case "resend_otp":
+		case "resendOtp":
 			purposeDescription = "New OTP for your previous request.";
 			actionText = "Resend OTP";
 			purposeAbb = "re-otp";

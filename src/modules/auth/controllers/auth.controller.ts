@@ -4,22 +4,19 @@ import { config } from "../../../configs/app.config.js";
 import { generateOTP, getOtpHTML } from "../../../utils/email.utils.js";
 import { sendVerificationEmail } from "../../../services/nodemailer.service.js";
 import type { NextFunction, Request, Response } from "express";
-import {
-	AccountRecoveryHandler,
-	emailPurposeMapper,
-	EmailUpdationHandler,
-	EmailVerificationHandler,
-	ResetPasswordHandler,
-} from "../utils/authcontroller.utils.js";
+import { emailPurposeMapper } from "../utils/authcontroller.utils.js";
 import * as z from "zod";
 import crypto from "crypto";
 import type {
+	otpResendSchema,
 	loginDeleteRecoverAccSchema,
+	otpSchema,
 	registerSchema,
 	usernameSchema,
+	updateDetailsSchema,
+	profileSchema,
 } from "../../../libs/zod/auth.zodschema.js";
 import userModel from "../models/users/user.schema.js";
-import otpModel from "../models/otp/otp.schema.js";
 import { otpService } from "../../../services/redisotp.service.js";
 import sessionModel from "../models/session/session.schema.js";
 
@@ -30,13 +27,13 @@ export async function registerController(
 ) {
 	const { username, email, password }: z.infer<typeof registerSchema> =
 		req.body;
-	const session = await userModel.db.startSession();
+	const Session = await userModel.db.startSession();
 	try {
-		session.startTransaction();
+		Session.startTransaction();
 
 		const existingUser = await userModel.findOne(
 			{ email, isVerified: true },
-			{ session },
+			{ session: Session },
 		);
 		if (existingUser) {
 			return res
@@ -48,11 +45,11 @@ export async function registerController(
 				email,
 				isVerified: false,
 			},
-			{ session },
+			{ session: Session },
 		);
 
 		if (existingUnverifiedUser) {
-			const emailSubject = "verifyEmailOR";
+			const emailSubject = emailPurposeMapper("verifyEmailOR");
 			const otp = generateOTP();
 			const html = getOtpHTML(otp, "resend_otp");
 
@@ -75,7 +72,7 @@ export async function registerController(
 				existingUnverifiedUser._id.toString(),
 			);
 
-			if (!otpStoreSuccess) {
+			if (!otpStoreSuccess.success) {
 				return res.status(503).json({
 					message: "Failed to store OTP. Please try again later.",
 				});
@@ -94,7 +91,7 @@ export async function registerController(
 					passwordHash: password,
 				},
 			],
-			{ session },
+			{ session: Session },
 		);
 		if (!user) {
 			return res.status(503).json({
@@ -106,7 +103,7 @@ export async function registerController(
 		const mailSuccess = await sendVerificationEmail(
 			config.GMAIL_USER_EMAIL as string,
 			email,
-			"Email Verification on TaskAPI",
+			emailPurposeMapper("verifyEmailOR"),
 			html,
 		);
 		if (!mailSuccess) {
@@ -121,26 +118,28 @@ export async function registerController(
 			"verifyEmailOR",
 			user[0]?._id.toString(),
 		);
-		if (!otpStoreSuccess) {
+		if (!otpStoreSuccess.success) {
 			return res.status(503).json({
-				message: "Failed to store OTP. Please try again later.",
+				message:
+					otpStoreSuccess.message ||
+					"Failed to store OTP. Please try again later.",
 			});
 		}
 
-		await session.commitTransaction();
+		await Session.commitTransaction();
 
 		return res.status(201).json({
 			message:
 				"User Registered Successfully! Verification OTP sent to your email . Verify Email and complete registration!",
 		});
 	} catch (error) {
-		if (session) {
-			await session.abortTransaction();
+		if (Session) {
+			await Session.abortTransaction();
 		}
 		next(error);
 	} finally {
-		if (session) {
-			await session.endSession();
+		if (Session) {
+			await Session.endSession();
 		}
 	}
 }
@@ -150,27 +149,33 @@ export async function loginController(
 	res: Response,
 	next: NextFunction,
 ) {
-	const { email, password }: z.infer<typeof loginDeleteRecoverAccSchema> = req.body;
+	const { email, password }: z.infer<typeof loginDeleteRecoverAccSchema> =
+		req.body;
 	const Session = await userModel.db.startSession();
 	try {
-		if(req.cookies.acToken){
+		Session.startTransaction();
+		if (req.cookies.acToken) {
 			return res.status(400).json({
-				message: "Already Logged In! Please Logout from current session to login again!",
+				message:
+					"Already Logged In! Please Logout from current session to login again!",
 			});
 		}
-		Session.startTransaction();
 
-		const isUser = await userModel.findOne({ email }, { session: Session }).select("+passwordHash");
+		const isUser = await userModel
+			.findOne({ email }, { session: Session })
+			.select("+passwordHash");
 		if (!isUser) {
 			return res.status(404).json({ message: "User Not Found!" });
 		}
 
 		const isPasswordCorrect = await isUser.comparePassword(password);
 		if (!isPasswordCorrect) {
+			await isUser.incrementFailedLogin();
 			return res.status(403).json({ message: "Invalid Password.Try Again!" });
 		}
 
 		if (!isUser.isVerified) {
+			await isUser.incrementFailedLogin();
 			return res.status(403).json({
 				message:
 					"Email Not Verified! Verification OTP sent to your email . Verify Email and complete registration!",
@@ -178,6 +183,7 @@ export async function loginController(
 		}
 
 		if (isUser.isDeleted) {
+			await isUser.incrementFailedLogin();
 			return res.status(403).json({
 				message:
 					"Account Scheduled for Deletion! Complete Account Recovery Procedure to recover your account!",
@@ -185,7 +191,8 @@ export async function loginController(
 		}
 
 		// Generate consistent deviceId from user agent
-		const deviceId = crypto.createHash("sha256")
+		const deviceId = crypto
+			.createHash("sha256")
 			.update(req.headers["user-agent"] || "unknown")
 			.digest("hex");
 
@@ -205,59 +212,71 @@ export async function loginController(
 		);
 
 		const accessToken = jwt.sign(
-			{ id: isUser._id ,type: "access"},
+			{ id: isUser._id, type: "access" },
 			config.ACCESS_TOKEN_JWT_SECRET,
 			{ expiresIn: "10m" },
 		);
 
 		const rfTokenHash = await bcrypt.hash(refreshToken, 12);
-	const acTokenHash = await bcrypt.hash(accessToken, 12);
-
 		// Check if session exists for this device
-		const existingSession = await sessionModel.findOne({
-			userId: isUser._id.toString(),
-			deviceId: deviceId,
-		}, { session: Session });
-	
-		if(existingSession){
-		
-			await existingSession.updateOne({
-				accessTokenHash: acTokenHash,
-				refreshTokenHash: rfTokenHash,
-				tokenFamily,
-				isRevoked: false,
-				status: "active",
-				lastActivityAt: new Date(),
-				refreshTokenExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-			}, { session: Session });
-		} else {
-			const activeSessionCount = await sessionModel.countDocuments({
+		const existingSession = await sessionModel.findOne(
+			{
 				userId: isUser._id.toString(),
-				isRevoked: false,
-			}, { session: Session });
+				deviceId: deviceId,
+			},
+			{ session: Session },
+		);
+
+		if (existingSession) {
+			await existingSession.updateOne(
+				{
+					refreshTokenHash: rfTokenHash,
+					tokenFamily,
+					isRevoked: false,
+					status: "active",
+					lastActivityAt: new Date(),
+					refreshTokenExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+				},
+				{ session: Session },
+			);
+		} else {
+			const activeSessionCount = await sessionModel.countDocuments(
+				{
+					userId: isUser._id.toString(),
+					isRevoked: false,
+				},
+				{ session: Session },
+			);
 
 			if (activeSessionCount >= 5) {
 				return res.status(403).json({
-					message: "Maximum 5 devices allowed. Logout from another device first.",
+					message:
+						"Maximum 5 devices allowed. Logout from another device first.",
 				});
 			}
 
-			const newSession = await sessionModel.create([{
-				userId: isUser._id.toString(),
-				deviceId: deviceId,
-				userAgent: req.headers["user-agent"] || "unknown",
-				ipAddress: req.ip || "unknown",
-				ipCountry: req.headers["cf-ipcountry"]?.toString() || "unknown",
-				ipRegion: req.headers["cf-ipregion"]?.toString() || "unknown",
-				ipCity: req.headers["cf-ipcity"]?.toString() || "unknown",
-				tokenFamily,
-				refreshTokenHash: rfTokenHash,
-				accessTokenHash: acTokenHash,
-				isRevoked: false,
-				status: "active",
-				lastActivityAt:new Date(),
-				refreshTokenExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-			}], { session: Session });
+			const newSession = await sessionModel.create(
+				[
+					{
+						userId: isUser._id.toString(),
+						deviceId: deviceId,
+						userAgent: req.headers["user-agent"] || "unknown",
+						ipAddress: req.ip || "unknown",
+						ipCountry: req.headers["cf-ipcountry"]?.toString() || "unknown",
+						ipRegion: req.headers["cf-ipregion"]?.toString() || "unknown",
+						ipCity: req.headers["cf-ipcity"]?.toString() || "unknown",
+						tokenFamily,
+						refreshTokenHash: rfTokenHash,
+						isRevoked: false,
+						status: "active",
+						lastActivityAt: new Date(),
+						refreshTokenExpiresAt: new Date(
+							Date.now() + 7 * 24 * 60 * 60 * 1000,
+						),
+					},
+				],
+				{ session: Session },
+			);
 
 			if (!newSession) {
 				return res.status(503).json({
@@ -265,6 +284,12 @@ export async function loginController(
 				});
 			}
 		}
+		await isUser.resetFailedLogin();
+		await isUser.updateLoginActivity(
+			req.ip as string,
+			req.headers["user-agent"] || "unknown",
+		);
+		await isUser.save({ session: Session });
 
 		await Session.commitTransaction();
 
@@ -282,8 +307,8 @@ export async function loginController(
 			await Session.abortTransaction();
 		}
 		next(error);
-	}finally{
-		if(Session){
+	} finally {
+		if (Session) {
 			await Session.endSession();
 		}
 	}
@@ -294,20 +319,38 @@ export async function tokenRotationController(
 	res: Response,
 	next: NextFunction,
 ) {
+	const Session = await userModel.db.startSession();
 	try {
+		Session.startTransaction();
 		const rfToken = req.cookies.rfToken;
 		if (!rfToken) {
 			return res.status(400).json({
 				message: "Refresh Token Not Found !",
 			});
 		}
-		const rfTokenDecoded = jwt.verify(rfToken, config.JWT_SECRET) as JwtPayload;
-		const session = await sessionModel.findOne({
-			userId: rfTokenDecoded.id,
-			userIP: rfTokenDecoded.ip,
-			userAgents: rfTokenDecoded.ua,
-			isRevoked: false,
-		});
+		const rfTokenDecoded = jwt.verify(
+			rfToken,
+			config.REFRESH_TOKEN_JWT_SECRET,
+		) as JwtPayload;
+
+		if (!rfTokenDecoded || rfTokenDecoded.type !== "refresh") {
+			return res.status(400).json({
+				message: "Invalid Refresh Token !",
+			});
+		}
+
+		const session = await sessionModel
+			.findOne(
+				{
+					userId: rfTokenDecoded.id,
+					deviceId: rfTokenDecoded.deviceId,
+					tokenFamily: rfTokenDecoded.tokenFamily,
+					isRevoked: false,
+				},
+				{ session: Session },
+			)
+			.select("+refreshTokenHash");
+
 		if (!session) {
 			return res.status(400).json({
 				message: "Refresh token is invalid or revoked",
@@ -315,14 +358,17 @@ export async function tokenRotationController(
 		}
 		const isRfTokenCorrect = await bcrypt.compare(
 			rfToken,
-			session.refreshToken,
+			session.refreshTokenHash,
 		);
 		if (!isRfTokenCorrect) {
 			return res.status(400).json({
 				message: "Refresh token is invalid ! Login to get a new one.",
 			});
 		}
-		const user = await userModel.findOne({ _id: rfTokenDecoded.id });
+		const user = await userModel.findOne(
+			{ _id: rfTokenDecoded.id },
+			{ session: Session },
+		);
 
 		if (!user) {
 			return res.status(422).json({
@@ -330,28 +376,54 @@ export async function tokenRotationController(
 			});
 		}
 
+		const tokenFamily = crypto.randomBytes(16).toString("hex");
+
 		const acToken = jwt.sign(
-			{ id: user._id, email: user.email },
-			config.JWT_SECRET_2,
-			{ expiresIn: 600 },
+			{ id: user._id, type: "access" },
+			config.ACCESS_TOKEN_JWT_SECRET,
+			{ expiresIn: "10m" },
 		);
 		const newRfToken = jwt.sign(
-			{ id: user._id, ip: req.ip, ua: req.headers["user-agent"] },
-			config.JWT_SECRET,
+			{
+				id: user._id,
+				tokenFamily,
+				deviceId: session.deviceId,
+				type: "refresh",
+			},
+			config.REFRESH_TOKEN_JWT_SECRET,
 			{
 				expiresIn: "7d",
 			},
 		);
+		const now = new Date();
+		const sevenDaysfromNow = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 		const newRfTokenHash = await bcrypt.hash(newRfToken, 12);
-		await session.updateOne({ refreshToken: newRfTokenHash, isRevoked: false });
+		await session.updateOne(
+			{
+				refreshTokenHash: newRfTokenHash,
+				isRevoked: false,
+				tokenFamily,
+				refreshTokenExpiresAt: sevenDaysfromNow,
+				lastActivityAt: now,
+			},
+			{ session: Session },
+		);
 
-		res.cookie("rfToken", newRfToken, config.COOKIE_CONF_RT);
-		res.cookie("acToken", acToken, config.COOKIE_CONF_AT);
+		await Session.commitTransaction();
+		res.cookie("rfToken", newRfToken, config.REFRESH_TOKEN_COOKIE_CONFIG);
+		res.cookie("acToken", acToken, config.ACCESS_TOKEN_COOKIE_CONFIG);
 		res.status(200).json({
 			message: "AccessToken Refreshed Successfully !",
 		});
 	} catch (error) {
+		if (Session) {
+			await Session.abortTransaction();
+		}
 		next(error);
+	} finally {
+		if (Session) {
+			await Session.endSession();
+		}
 	}
 }
 
@@ -364,29 +436,37 @@ export async function logoutController(
 	try {
 		Session.startTransaction();
 
-		const acToken = req.cookies.acToken;
-		if (!acToken) {
+		const rfToken = req.cookies.rfToken;
+		if (!rfToken) {
 			return res.status(400).json({
-				message: "Access Token Not Found !",
+				message: "Refresh Token Not Found !",
 			});
 		}
-		const acTokenDecoded = jwt.verify(acToken, config.ACCESS_TOKEN_JWT_SECRET) as JwtPayload;
-		const session = await sessionModel.findOne({
-			userId: acTokenDecoded.id,
-			isRevoked: false,
-		},{ session: Session }).select("+accessTokenHash");
+		const rfTokenDecoded = jwt.verify(
+			rfToken,
+			config.REFRESH_TOKEN_JWT_SECRET,
+		) as JwtPayload;
+		const session = await sessionModel
+			.findOne(
+				{
+					userId: rfTokenDecoded.id,
+					isRevoked: false,
+				},
+				{ session: Session },
+			)
+			.select("+refreshTokenHash");
 		if (!session) {
 			return res.status(400).json({
-				message: "Access token is invalid or revoked | Session not found",
+				message: "Refresh token is invalid or revoked | Session not found",
 			});
 		}
-		const isAcTokenCorrect = await bcrypt.compare(
-			acToken,
-			session.accessTokenHash,
+		const isRfTokenCorrect = await bcrypt.compare(
+			rfToken,
+			session.refreshTokenHash,
 		);
-		if (!isAcTokenCorrect) {
+		if (!isRfTokenCorrect) {
 			return res.status(400).json({
-				message: "Access token is invalid or revoked",
+				message: "Refresh token is invalid or revoked",
 			});
 		}
 		await session.updateOne({ isRevoked: true }, { session: Session });
@@ -414,33 +494,55 @@ export async function updateDetailsController(
 	res: Response,
 	next: NextFunction,
 ) {
+	const Session = await userModel.db.startSession();
 	try {
-		const { fieldToUpdate, newValue, password } = req.body;
+		Session.startTransaction();
+		const {
+			fieldToUpdate,
+			newValue,
+			password,
+		}: z.infer<typeof updateDetailsSchema> = req.body;
 		const decodedToken = jwt.verify(
 			req.cookies.acToken,
-			config.JWT_SECRET_2,
+			config.ACCESS_TOKEN_JWT_SECRET,
 		) as JwtPayload;
-		const user = await userModel.findOne({ email: decodedToken.email });
+		const user = await userModel.findOne(
+			{ _id: decodedToken.userId },
+			{ session: Session },
+		);
 		if (!user) {
 			return res.status(404).json({ message: "User Not Found!" });
 		}
-		const isPasswordCorrect = await bcrypt.compare(password, user.password);
+		const isPasswordCorrect = await user.comparePassword(password);
 		if (!isPasswordCorrect) {
 			return res.status(403).json({ message: "Invalid Password.Try Again!" });
 		}
 		switch (fieldToUpdate) {
 			case "username":
-				await user.updateOne({
-					username: newValue as z.infer<typeof usernameSchema>,
-				});
+				await user.updateOne(
+					{
+						username: newValue as z.infer<typeof usernameSchema>,
+					},
+					{ session: Session },
+				);
+				await Session.commitTransaction();
 				break;
-			case "email":
+			case "profile":
+				await user.updateOne(
+					{
+						profile: newValue as z.infer<typeof profileSchema>,
+					},
+					{ session: Session },
+				);
+				await Session.commitTransaction();
+				break;
+			case "email": {
 				const otp = generateOTP();
 				const html = getOtpHTML(otp, "verifyEmailUP");
 				const mailSuccess = await sendVerificationEmail(
 					config.GMAIL_USER_EMAIL,
 					user.email,
-					"Email Verification on TaskAPI",
+					emailPurposeMapper("verifyEmailUP"),
 					html,
 				);
 				if (!mailSuccess) {
@@ -449,24 +551,28 @@ export async function updateDetailsController(
 							"Failed to send verification email. Please try again later.",
 					});
 				}
-				const otpHash = await bcrypt.hash(otp, 12);
-				const otpObject = await otpModel.create({
-					userId: user._id,
-					otp: otpHash,
-					email: user.email,
-					purpose: "verifyEmailUP",
-					isTemp: true,
-					fieldToUpdateNewValue: newValue,
-				});
+				const otpStoreSuccess = await otpService.storeOTP(
+					user.email,
+					otp,
+					"verifyEmailUP",
+					newValue,
+				);
+				if (!otpStoreSuccess) {
+					return res.status(500).json({
+						message: "Failed to store OTP. Please try again later.",
+					});
+				}
+				await Session.commitTransaction();
 				break;
-			case "password":
+			}
+			case "password": {
 				const otp2 = generateOTP();
 				const html2 = getOtpHTML(otp2, "resetPassword");
 
 				const mailSuccess2 = await sendVerificationEmail(
 					config.GMAIL_USER_EMAIL,
 					user.email,
-					"Password Reset Verification on TaskAPI",
+					emailPurposeMapper("resetPassword"),
 					html2,
 				);
 
@@ -477,27 +583,38 @@ export async function updateDetailsController(
 					});
 				}
 
-				const otpHash2 = await bcrypt.hash(otp2, 12);
 				const newPasswordHash = await bcrypt.hash(newValue, 12);
-				const otpObject2 = await otpModel.create({
-					userId: user._id,
-					otp: otpHash2,
-					email: user.email,
-					purpose: "resetPassword",
-					isTemp: true,
-					fieldToUpdateNewValue: newPasswordHash,
-				});
+				const otpStoreSuccess = await otpService.storeOTP(
+					user.email,
+					otp2,
+					"resetPassword",
+					newPasswordHash,
+				);
+
+				if (!otpStoreSuccess) {
+					return res.status(500).json({
+						message: "Failed to store OTP. Please try again later.",
+					});
+				}
+				await Session.commitTransaction();
 				break;
+			}
 			default:
 				return res.status(400).json({ message: "Invalid Field to Update!" });
 		}
-		await user.save();
 		return res.status(200).json({
 			message:
 				"Verification OTP sent to your email! Complete OTP verification to update your details!",
 		});
 	} catch (error) {
+		if (Session) {
+			await Session.abortTransaction();
+		}
 		next(error);
+	} finally {
+		if (Session) {
+			await Session.endSession();
+		}
 	}
 }
 
@@ -506,30 +623,53 @@ export async function deleteAccountController(
 	res: Response,
 	next: NextFunction,
 ) {
+	const Session = await userModel.db.startSession();
 	try {
-		const { usernameORemail, password } = req.body;
-		const user = await userModel.findOne({
-			$or: [{ username: usernameORemail }, { email: usernameORemail }],
-		});
+		Session.startTransaction();
+
+		const acToken = req.cookies.acToken;
+		if (!acToken) {
+			return res.status(400).json({
+				message: "Access Token Not Found | Unauthorised !",
+			});
+		}
+		const { email, password }: z.infer<typeof loginDeleteRecoverAccSchema> =
+			req.body;
+		const user = await userModel
+			.findOne({ email }, { session: Session })
+			.select("+passwordHash");
+
 		if (!user) {
 			return res.status(404).json({ message: "User Not Found!" });
 		}
-		const isPasswordCorrect = await bcrypt.compare(password, user.password);
+
+		const isPasswordCorrect = await user.comparePassword(password);
 		if (!isPasswordCorrect) {
 			return res.status(403).json({ message: "Invalid Password.Try Again!" });
 		}
+
 		if (user.isDeleted) {
 			return res
 				.status(400)
 				.json({ message: "Account Already Scheduled to be Deleted!" });
 		}
-		await user.updateOne({ isDeleted: true });
+
+		await user.softDelete(user._id.toString());
+		await user.save({ session: Session });
+		await Session.commitTransaction();
 		return res.status(200).json({
 			message:
-				"Account Scheduled to be Deleted! If you want to recover it,Complete Account Recovery Procedure within 30 days and recover your account!",
+				"Account Scheduled to be Deleted! To recover Your Account ,Complete Account Recovery Procedure within 30 days !",
 		});
 	} catch (error) {
+		if (Session) {
+			await Session.abortTransaction();
+		}
 		next(error);
+	} finally {
+		if (Session) {
+			await Session.endSession();
+		}
 	}
 }
 
@@ -538,15 +678,19 @@ export async function recoverDeletedAccountController(
 	res: Response,
 	next: NextFunction,
 ) {
+	const Session = await userModel.db.startSession();
 	try {
-		const { usernameORemail, password } = req.body;
-		const user = await userModel.findOne({
-			$or: [{ username: usernameORemail }, { email: usernameORemail }],
-		});
+		Session.startTransaction();
+		const { email, password }: z.infer<typeof loginDeleteRecoverAccSchema> =
+			req.body;
+		const user = await userModel
+			.findOne({ email }, { session: Session })
+			.select("+passwordHash");
+
 		if (!user) {
 			return res.status(404).json({ message: "User Not Found!" });
 		}
-		const isPasswordCorrect = await bcrypt.compare(password, user.password);
+		const isPasswordCorrect = await user.comparePassword(password);
 		if (!isPasswordCorrect) {
 			return res.status(403).json({ message: "Invalid Password.Try Again!" });
 		}
@@ -568,20 +712,33 @@ export async function recoverDeletedAccountController(
 				message: "Failed to send verification email. Please try again later.",
 			});
 		}
-		const otpHash = await bcrypt.hash(otp, 12);
-		const otpObject = await otpModel.create({
-			userId: user._id,
-			otp: otpHash,
-			email: user.email,
-			purpose: "account_recovery",
-			isTemp: true,
-		});
+		const otpStoreSuccess = await otpService.storeOTP(
+			email,
+			otp,
+			"account_recovery",
+			user._id.toString(),
+		);
+		if (!otpStoreSuccess.success) {
+			return res.status(503).json({
+				message:
+					otpStoreSuccess.message ||
+					"Failed to store OTP. Please try again later.",
+			});
+		}
+		await Session.commitTransaction();
 		return res.status(200).json({
 			message:
 				"OTP Sent to your Email! Complete OTP Verification to recover your account!",
 		});
 	} catch (error) {
+		if (Session) {
+			await Session.abortTransaction();
+		}
 		next(error);
+	} finally {
+		if (Session) {
+			await Session.endSession();
+		}
 	}
 }
 
@@ -594,16 +751,18 @@ export async function getUserAccountController(
 		const accessToken = req.cookies.acToken;
 		const decodedToken = jwt.verify(
 			accessToken,
-			config.JWT_SECRET_2,
+			config.ACCESS_TOKEN_JWT_SECRET,
 		) as JwtPayload;
+
 		const user = await userModel.findOne({ _id: decodedToken.id });
+
 		if (!user) {
 			return res.status(404).json({ message: "User Not Found!" });
 		}
 		if (user.isDeleted) {
 			return res.status(400).json({
 				message:
-					"Account Scheduled for Deletion! Complete Account Recovery Procedure within 30 days to recover your account!",
+					"Account Scheduled for Deletion! Complete Account Recovery Procedure to recover your account!",
 			});
 		}
 		return res.status(200).json({
@@ -611,7 +770,8 @@ export async function getUserAccountController(
 			data: {
 				username: user.username,
 				email: user.email,
-				isVerified: user.isVerified,
+				status: user.status,
+				role: user.roles,
 			},
 		});
 	} catch (error) {
@@ -624,23 +784,174 @@ export async function verificationController(
 	res: Response,
 	next: NextFunction,
 ) {
+	const Session = await userModel.db.startSession();
 	try {
-		const { otp } = req.body;
+		Session.startTransaction();
+		const { otp, email }: z.infer<typeof otpSchema> = req.body;
 		if (req.query.purpose === "ve-em-or") {
-			return EmailVerificationHandler(otp)(req, res, next);
+			const otpResult = await otpService.verifyOTP(email, otp, "verifyEmailOR");
+			if (!otpResult.success) {
+				return res.status(400).json({ message: otpResult.message });
+			}
+			const userId = otpResult.userId;
+			if (!userId) {
+				return res.status(400).json({
+					message:
+						"Invalid OTP verification attempt.Please try registering after some Time.",
+				});
+			}
+			const user = await userModel.findOne(
+				{ _id: userId },
+				{ session: Session },
+			);
+			if (!user) {
+				return res.status(404).json({ message: "User Not Found!" });
+			}
+			if (user.isVerified) {
+				return res.status(400).json({ message: "Email Already Verified!" });
+			}
+			user.isVerified = true;
+			await user.save({ session: Session });
+			await Session.commitTransaction();
+			return res.status(200).json({
+				message:
+					"Email Verified Successfully! You can now login to your account!",
+			});
 		} else if (req.query.purpose === "ve-em-up") {
-			return EmailUpdationHandler(otp)(req, res, next);
+			const otpResult = await otpService.verifyOTP(email, otp, "verifyEmailUP");
+
+			if (!otpResult.success) {
+				return res.status(400).json({ message: otpResult.message });
+			}
+			if (!otpResult.newValue) {
+				return res
+					.status(400)
+					.json({ message: "New email value not found in OTP data." });
+			}
+			const userId = otpResult.userId;
+			if (!userId) {
+				return res.status(400).json({
+					message:
+						"Invalid OTP verification attempt.Please try registering after some Time.",
+				});
+			}
+			const user = await userModel.findOne(
+				{ _id: userId },
+				{ session: Session },
+			);
+			if (!user) {
+				return res.status(404).json({ message: "User Not Found!" });
+			}
+			if (user.isVerified) {
+				return res.status(400).json({ message: "Email Already Verified!" });
+			}
+			user.email = otpResult.newValue;
+			user.isVerified = true;
+			await user.save({ session: Session });
+			await Session.commitTransaction();
+			return res.status(200).json({
+				message:
+					"Email Updated Successfully! You can now login to your account!",
+			});
 		} else if (req.query.purpose === "re-pa") {
-			return ResetPasswordHandler(otp)(req, res, next);
+			const otpResult = await otpService.verifyOTP(email, otp, "resetPassword");
+
+			if (!otpResult.success) {
+				return res.status(400).json({ message: otpResult.message });
+			}
+			if (!otpResult.newValue) {
+				return res
+					.status(400)
+					.json({ message: "New password value not found in OTP data." });
+			}
+			const userId = otpResult.userId;
+			if (!userId) {
+				return res.status(400).json({
+					message:
+						"Invalid OTP verification attempt.Please try registering after some Time.",
+				});
+			}
+			const user = await userModel.findOne(
+				{ _id: userId },
+				{ session: Session },
+			);
+			if (!user) {
+				return res.status(404).json({ message: "User Not Found!" });
+			}
+			if (user.isVerified) {
+				return res.status(400).json({ message: "Email Already Verified!" });
+			}
+			const isSameAsOldPassword = await user.isPasswordReused(
+				otpResult.newValue,
+			);
+			if (isSameAsOldPassword) {
+				return res
+					.status(400)
+					.json({ message: "New Password cannot be same as last  password!" });
+			}
+			user.passwordHash = otpResult.newValue;
+			user.isVerified = true;
+			await user.save({ session: Session });
+			await Session.commitTransaction();
+			return res.status(200).json({
+				message:
+					"Password Updated Successfully! You can now login to your account!",
+			});
 		} else if (req.query.purpose === "ac-re") {
-			return AccountRecoveryHandler(otp)(req, res, next);
+			const otpResult = await otpService.verifyOTP(
+				email,
+				otp,
+				"accountRecovery",
+			);
+
+			if (!otpResult.success) {
+				return res.status(400).json({ message: otpResult.message });
+			}
+			if (!otpResult.newValue) {
+				return res
+					.status(400)
+					.json({ message: "New email value not found in OTP data." });
+			}
+			const userId = otpResult.userId;
+			if (!userId) {
+				return res.status(400).json({
+					message:
+						"Invalid OTP verification attempt.Please try registering after some Time.",
+				});
+			}
+			const user = await userModel.findOne(
+				{ _id: userId, isDeleted: true },
+				{ session: Session },
+			);
+			if (!user) {
+				return res.status(404).json({ message: "User Not Found!" });
+			}
+			if (user.status === "active") {
+				return res
+					.status(400)
+					.json({ message: "Account is already recovered!" });
+			}
+			await user.restore();
+			await user.save({ session: Session });
+			await Session.commitTransaction();
+			return res.status(200).json({
+				message:
+					"Account Recovered Successfully! You can now login to your account!",
+			});
 		} else {
 			return res
 				.status(403)
 				.json({ message: "Invalid Access for Verification API!" });
 		}
 	} catch (error) {
+		if (Session) {
+			await Session.abortTransaction();
+		}
 		next(error);
+	} finally {
+		if (Session) {
+			await Session.endSession();
+		}
 	}
 }
 
@@ -650,32 +961,17 @@ export async function resendOtpController(
 	next: NextFunction,
 ) {
 	try {
-		const { email } = req.body;
+		const purpose = req.query.purpose;
+		const { email }: z.infer<typeof otpResendSchema> = req.body;
 		const user = await userModel.findOne({ email });
 		if (!user) {
 			return res.status(404).json({ message: "User Not Found!" });
 		}
-		const existingOtp = await otpModel
-			.findOne({
-				email,
-				isUsed: false,
-				attemptsLeft: { $gt: 0 },
-				expiryTime: { $gt: new Date() },
-			})
-			.sort({ createdAt: -1 });
 
-		if (!existingOtp) {
-			return res.status(404).json({
-				message:
-					"No valid OTP request found. Please initiate a new verification process.",
-			});
-		}
-		const purpose = existingOtp.purpose;
-
-		const emailSubject = emailPurposeMapper(purpose);
+		const emailSubject = emailPurposeMapper(purpose as string);
 
 		const otp = generateOTP();
-		const html = getOtpHTML(otp, "resend_otp");
+		const html = getOtpHTML(otp, "resendOtp");
 
 		const mailSuccess = await sendVerificationEmail(
 			config.GMAIL_USER_EMAIL,
@@ -688,22 +984,19 @@ export async function resendOtpController(
 				message: "Failed to send OTP email. Please try again later.",
 			});
 		}
-		const otpHash = await bcrypt.hash(otp, 12);
-		const newAttemptsLeft =
-			existingOtp.attemptsLeft > 0 ? existingOtp.attemptsLeft - 1 : 0;
-
-		const otpObject = await OtpModel.create({
-			userId: user._id,
-			otp: otpHash,
-			email: user.email,
-			purpose,
-			attemptsLeft: newAttemptsLeft,
-		});
-
-		await existingOtp.updateOne({
-			isUsed: true,
-			attemptsLeft: newAttemptsLeft,
-		});
+		const otpStoreSuccess = await otpService.storeOTP(
+			email,
+			otp,
+			"resendOtp",
+			user._id.toString(),
+		);
+		if (!otpStoreSuccess.success) {
+			return res.status(503).json({
+				message:
+					otpStoreSuccess.message ||
+					"Failed to store OTP. Please try again later.",
+			});
+		}
 
 		return res.status(200).json({
 			message: "OTP resent successfully! Please check your email.",

@@ -49,18 +49,6 @@ export const userSchema = new mongoose.Schema(
 
 		verifiedAt: Date,
 
-		// Temporary fields until status is unverified for the user
-
-		verificationToken: {
-			type: String,
-			select: false,
-		},
-
-		verificationTokenExpiry: {
-			type: Date,
-			select: false,
-		},
-
 		lastPassword: {
 			type: String,
 			select: false,

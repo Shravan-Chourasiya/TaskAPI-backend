@@ -42,11 +42,6 @@ export const sessionSchema = new mongoose.Schema(
 		},
 
 		// ============ TOKEN HASHES (Audit Trail Only) ============
-		accessTokenHash: {
-			type: String,
-			required: [true, "Access token is required"],
-			select: false,
-		},
 		refreshTokenHash: {
 			type: String,
 			required: [true, "Refresh token is required"],

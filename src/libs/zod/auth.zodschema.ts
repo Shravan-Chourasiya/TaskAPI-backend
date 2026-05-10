@@ -60,12 +60,14 @@ export const otpSchema = z.object({
 		.string()
 		.length(6, "OTP must be exactly 6 digits")
 		.regex(/^\d{6}$/, "OTP must contain only digits"),
-});
+
+		email: emailSchema,	
+	});
 
 // Update details schema
 export const updateDetailsSchema = z
 	.object({
-		fieldToUpdate: z.enum(["username", "email", "password", "profile"]),
+		fieldToUpdate: z.enum(["username","profile", "email", "password", "profile"]),
 		newValue: z.string().min(5, "New value required"),
 		password: passwordSchema,
 	})

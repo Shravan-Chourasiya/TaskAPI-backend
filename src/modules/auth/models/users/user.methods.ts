@@ -14,7 +14,7 @@ userSchema.methods.comparePassword = async function (
 userSchema.methods.isPasswordReused = async function (
 	newPassword: string,
 ): Promise<boolean> {
-	if (!this.lastPassword) return false;
+	if (!this.lastPassword) {return false};
 	return bcrypt.compare(newPassword, this.lastPassword);
 };
 
@@ -87,7 +87,7 @@ userSchema.methods.softDelete = async function (
 	this.deletedAt = new Date();
 	this.status = "deleted";
 	this.scheduledDeletionAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-	if (deletedBy) this.deletedBy = deletedBy;
+	if (deletedBy){ this.deletedBy = deletedBy};
 	await this.save();
 };
 
