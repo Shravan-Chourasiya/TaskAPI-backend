@@ -8,6 +8,7 @@
     "dev": "tsx watch server.ts",
     "start": "node dist/server.js",
     "clear": "tsx dbresetScript.ts",
+    "seed:admin": "tsx src/scripts/seedAdmin.ts",
     "typecheck": "tsc --noEmit",
     "build": "tsc",
     "lint": "eslint . --ext .ts"

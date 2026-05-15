@@ -16,9 +16,9 @@ import type {
 	updateDetailsSchema,
 	profileSchema,
 } from "../../../libs/zod/auth.zodschema.js";
-import userModel from "../models/users/user.schema.js";
+import userModel from "../models/user.schema.js";
 import { otpService } from "../../../services/redisotp.service.js";
-import sessionModel from "../models/session/session.schema.js";
+import sessionModel from "../models/session.schema.js";
 
 export async function registerController(
 	req: Request,
@@ -27,13 +27,13 @@ export async function registerController(
 ) {
 	const { username, email, password }: z.infer<typeof registerSchema> =
 		req.body;
-	const Session = await userModel.db.startSession();
+	// const Session = await userModel.db.startSession();
 	try {
-		Session.startTransaction();
+		// Session.startTransaction();
 
 		const existingUser = await userModel.findOne(
 			{ email, isVerified: true },
-			{ session: Session },
+			// { session: Session },
 		);
 		if (existingUser) {
 			return res
@@ -45,7 +45,7 @@ export async function registerController(
 				email,
 				isVerified: false,
 			},
-			{ session: Session },
+			// { session: Session },
 		);
 
 		if (existingUnverifiedUser) {
@@ -91,7 +91,7 @@ export async function registerController(
 					passwordHash: password,
 				},
 			],
-			{ session: Session },
+			// { session: Session },
 		);
 		if (!user) {
 			return res.status(503).json({
@@ -126,21 +126,22 @@ export async function registerController(
 			});
 		}
 
-		await Session.commitTransaction();
+		// await Session.commitTransaction();
 
 		return res.status(201).json({
 			message:
 				"User Registered Successfully! Verification OTP sent to your email . Verify Email and complete registration!",
 		});
 	} catch (error) {
-		if (Session) {
-			await Session.abortTransaction();
-		}
+		// if (Session) {
+		// 	await Session.abortTransaction();
+		// }
 		next(error);
-	} finally {
-		if (Session) {
-			await Session.endSession();
-		}
+		// } finally {
+		// 	// 	if (Session) {
+		// 		await Session.endSession();
+		// 	}
+		// }
 	}
 }
 

@@ -6,6 +6,7 @@ import { config } from "./configs/app.config.js";
 import cors from "cors";
 import { authRouter } from "./routes/auth.routes.js";
 import { apiRateLimiter } from "./middlewares/ratelimiting.middleware.js";
+import { subscriptionRouter } from "./routes/subscription.routes.js";
 const app = express();
 
 await dbConnect();
@@ -22,6 +23,7 @@ app.use(morgan(config.NODE_ENV === "production" ? "combined" : "development"));
 app.use(cors(corsOptions));
 
 app.use("/api/v1/auth",apiRateLimiter, authRouter);
+app.use("/api/v1/subscription",apiRateLimiter, subscriptionRouter);
 
 
 export { app };

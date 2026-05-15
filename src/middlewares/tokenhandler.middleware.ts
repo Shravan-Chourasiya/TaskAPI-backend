@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
-import sessionModel from "../modules/auth/models/session/session.schema.js";
+import sessionModel from "../modules/auth/models/session.schema.js";
 import jwt, { type JwtPayload } from "jsonwebtoken";
 import { config } from "../configs/app.config.js";
 import bcrypt from "bcryptjs";
@@ -27,7 +27,7 @@ export const accessTokenHandler = asyncErrorHandler(
 		}
 
 		// Verify JWT signature and expiry (throws error if invalid)
-		const decoded = jwt.verify(accessToken, config.JWT_SECRET_2) as JwtPayload;
+		const decoded = jwt.verify(accessToken, config.ACCESS_TOKEN_JWT_SECRET) as JwtPayload;
 
 		// Attach userID to request for downstream use
 		req.userID = decoded.id;
@@ -54,7 +54,7 @@ export const refreshTokenHandler = asyncErrorHandler(
 		}
 
 		// 1. Verify JWT signature and expiry
-		const decoded = jwt.verify(refreshToken, config.JWT_SECRET) as JwtPayload;
+		const decoded = jwt.verify(refreshToken, config.REFRESH_TOKEN_JWT_SECRET) as JwtPayload;
 
 		// 2. Find active session in database
 		const session = await sessionModel
@@ -145,7 +145,7 @@ export const strictAuthHandler = asyncErrorHandler(
 			});
 		}
 
-		const decoded = jwt.verify(accessToken, config.JWT_SECRET_2) as JwtPayload;
+		const decoded = jwt.verify(accessToken, config.ACCESS_TOKEN_JWT_SECRET) as JwtPayload;
 
 		// Verify session still exists and is active
 		const session = await sessionModel.findOne({
