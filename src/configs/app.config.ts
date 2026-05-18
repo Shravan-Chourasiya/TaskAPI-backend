@@ -1,7 +1,6 @@
 import "dotenv/config";
 import type { Config } from "../Types/config.interface.js";
 import {
-	getCookieVar,
 	getEnvVar,
 	getEnvVarArr,
 } from "../utils/configenv.utils.js";
@@ -18,8 +17,6 @@ export const config: Config = {
 	GMAIL_CLIENT_ID: getEnvVar("GMAIL_CLIENT_ID"),
 	GMAIL_CLIENT_SECRET: getEnvVar("GMAIL_CLIENT_SECRET"),
 	OTP_SALT: getEnvVar("OTP_SALT"),
-	ACCESS_TOKEN_COOKIE_CONFIG: getCookieVar("ACCESS_TOKEN_COOKIE_CONFIG"),
-	REFRESH_TOKEN_COOKIE_CONFIG: getCookieVar("REFRESH_TOKEN_COOKIE_CONFIG"),
 	API_BASE_URL: getEnvVar("API_BASE_URL"),
 	ALLOWED_ORIGINS: getEnvVarArr("ALLOWED_ORIGINS"),
 };

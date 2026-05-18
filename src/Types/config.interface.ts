@@ -5,8 +5,8 @@ export interface Config {
 	DB_NAME: string;
 	REFRESH_TOKEN_JWT_SECRET: string;
 	ACCESS_TOKEN_JWT_SECRET: string;
-	REFRESH_TOKEN_COOKIE_CONFIG: object;
-	ACCESS_TOKEN_COOKIE_CONFIG: object;
+	// REFRESH_TOKEN_COOKIE_CONFIG: object;
+	// ACCESS_TOKEN_COOKIE_CONFIG: object;
 	NODE_ENV: string;
 	GMAIL_USER_EMAIL: string;
 	GMAIL_REFRESH_TOKEN: string;

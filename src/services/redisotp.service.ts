@@ -38,6 +38,7 @@ export const otpService = {
 		}
 		const otpHash = await bcrypt.hash(otp, 12);
 		const key = `otp:${email.toLowerCase()}:${purpose}`;
+
 		const data: PendingOTP = {
 			otpHash,
 			email: email.toLowerCase(),
@@ -71,8 +72,8 @@ export const otpService = {
 		purpose: string,
 	): Promise<{ success: boolean; message: string; userId?: string ,newValue?: string}> {
 		const key = `otp:${email.toLowerCase()}:${purpose}`;
-		const data = await redisClient.get(key);
-
+		const rawData = await redisClient.get(key);
+		const data = rawData ? JSON.parse(rawData) : null;
 		if (!data) {
 			return {
 				success: false,
@@ -80,7 +81,7 @@ export const otpService = {
 			};
 		}
 
-		const otpData: PendingOTP = JSON.parse(data);
+		const otpData: PendingOTP = data;
 
 		// Check if expired
 		if (Date.now() > otpData.expiresAt) {

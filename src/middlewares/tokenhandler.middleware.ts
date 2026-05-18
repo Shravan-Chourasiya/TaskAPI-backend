@@ -17,7 +17,6 @@ type RequestWithUser = Request & {
 export const accessTokenHandler = asyncErrorHandler(
 	async (req: RequestWithUser, res: Response, next: NextFunction) => {
 		const accessToken = req.cookies.acToken;
-
 		if (!accessToken) {
 			return res.status(401).json({
 				success: false,
@@ -44,7 +43,6 @@ export const accessTokenHandler = asyncErrorHandler(
 export const refreshTokenHandler = asyncErrorHandler(
 	async (req: RequestWithUser, res: Response, next: NextFunction) => {
 		const refreshToken = req.cookies.rfToken;
-
 		if (!refreshToken) {
 			return res.status(401).json({
 				success: false,

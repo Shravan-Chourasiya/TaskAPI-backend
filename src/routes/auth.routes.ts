@@ -42,7 +42,7 @@ router.post(
 	authControllers.loginController,
 );
 
-router.delete("/logout", accessTokenHandler, authControllers.logoutController);
+router.post("/logout", refreshTokenHandler, authControllers.logoutController);
 
 router.patch(
 	"/account/update",

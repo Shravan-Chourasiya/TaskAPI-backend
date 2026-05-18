@@ -23,6 +23,7 @@ app.use(morgan(config.NODE_ENV === "production" ? "combined" : "development"));
 app.use(cors(corsOptions));
 
 app.use("/api/v1/auth",apiRateLimiter, authRouter);
+app.use("/api/v1/user",apiRateLimiter, authRouter);
 app.use("/api/v1/subscription",apiRateLimiter, subscriptionRouter);
 
 

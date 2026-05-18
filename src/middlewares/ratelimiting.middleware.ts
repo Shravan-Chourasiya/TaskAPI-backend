@@ -27,7 +27,7 @@
 // 	},
 // });
 
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import RedisStore, {
 	type RedisReply,
 	type SendCommandFn,
@@ -35,6 +35,7 @@ import RedisStore, {
 import type { Request, Response } from "express";
 import { redisClient } from "../configs/redis.init.js";
 import crypto from "crypto";
+import constants from "../constants.js";
 
 type RequestWithUser = Request & {
 	userID?: string;
@@ -65,8 +66,8 @@ const rateLimitHandler = (req: Request, res: Response) => {
 
 // ============ GENERAL API RATE LIMITER ============
 export const apiRateLimiter = rateLimit({
-	windowMs: 15 * 60 * 1000, // 15 minutes
-	limit: 100, // 100 requests per 15 min
+	windowMs: constants.GENERAL_RL_TIME_WINDOW_MS, // 15 minutes
+	limit: constants.GENERAL_API_RATE_LIMIT_MAX, // 100 requests per 15 min
 	standardHeaders: "draft-7",
 	legacyHeaders: false,
 	store: new RedisStore({
@@ -75,7 +76,7 @@ export const apiRateLimiter = rateLimit({
 	}),
 	keyGenerator: (req: RequestWithUser) => {
 		const userID = req.userID;
-		const ip = req.ip || "unknown";
+		const ip = ipKeyGenerator((req.ip as string) || "unknown");
 		return userID ? `user:${userID}` : `ip:${ip}`;
 	},
 	handler: rateLimitHandler,
@@ -84,8 +85,8 @@ export const apiRateLimiter = rateLimit({
 
 // ============ AUTH RATE LIMITER (Login/Register) ============
 export const authRateLimiter = rateLimit({
-	windowMs: 15 * 60 * 1000, // 15 minutes
-	limit: 5, // 5 attempts per 15 min
+	windowMs: constants.AUTH_RL_TIME_WINDOW_MS, // 10 minutes
+	limit: constants.AUTH_RATE_LIMIT_MAX, 
 	standardHeaders: "draft-7",
 	legacyHeaders: false,
 	store: new RedisStore({
@@ -94,7 +95,7 @@ export const authRateLimiter = rateLimit({
 	}),
 	keyGenerator: (req) => {
 		const email = req.body.email?.toLowerCase();
-		const ip = req.ip || "unknown";
+		const ip = ipKeyGenerator((req.ip as string) || "unknown");
 		return email ? `email:${hashEmail(email)}` : `ip:${ip}`;
 	},
 	handler: rateLimitHandler,
@@ -103,8 +104,8 @@ export const authRateLimiter = rateLimit({
 
 // ============ OTP GENERATION RATE LIMITER ============
 export const otpGenerationLimiter = rateLimit({
-	windowMs: 5 * 60 * 1000, // 5 minutes
-	limit: 3, // 3 OTP requests per 5 min
+	windowMs: constants.OTP_RL_TIME_WINDOW_MS, // 10 minutes
+	limit: constants.OTP_RATE_LIMIT_MAX, // 3 OTP requests per 10 min
 	standardHeaders: "draft-7",
 	legacyHeaders: false,
 	store: new RedisStore({
@@ -113,7 +114,7 @@ export const otpGenerationLimiter = rateLimit({
 	}),
 	keyGenerator: (req) => {
 		const email = req.body.email?.toLowerCase();
-		const ip = req.ip || "unknown";
+		const ip = ipKeyGenerator((req.ip as string) || "unknown");
 		return email ? `email:${hashEmail(email)}` : `ip:${ip}`;
 	},
 	handler: rateLimitHandler,
@@ -122,8 +123,8 @@ export const otpGenerationLimiter = rateLimit({
 
 // ============ OTP VERIFICATION RATE LIMITER ============
 export const otpVerificationLimiter = rateLimit({
-	windowMs: 5 * 60 * 1000, // 5 minutes
-	limit: 5, // 5 verification attempts per 5 min
+	windowMs: constants.OTP_RL_TIME_WINDOW_MS, // 10 minutes
+	limit: constants.OTP_RATE_LIMIT_MAX, // 5 verification attempts per 10 min
 	standardHeaders: "draft-7",
 	legacyHeaders: false,
 	store: new RedisStore({
@@ -132,7 +133,7 @@ export const otpVerificationLimiter = rateLimit({
 	}),
 	keyGenerator: (req) => {
 		const email = req.body.email?.toLowerCase();
-		const ip = req.ip || "unknown";
+		const ip = ipKeyGenerator((req.ip as string) || "unknown");
 		return email ? `email:${hashEmail(email)}` : `ip:${ip}`;
 	},
 	handler: rateLimitHandler,

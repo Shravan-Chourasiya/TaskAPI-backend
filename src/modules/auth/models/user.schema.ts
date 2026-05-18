@@ -88,7 +88,6 @@ export const userSchema = new mongoose.Schema(
 					os: String,
 					deviceId: {
 						type: String,
-						unique: true, // Index for efficient querying of devices
 					},
 				},
 			],
@@ -202,7 +201,6 @@ userSchema.index({ email: 1, isDeleted: 1 });
 userSchema.index({ email: 1, isVerified: 1 });
 userSchema.index({ email: 1, isBlackListed: 1 });
 userSchema.index({ email: 1, is2FAEnabled: 1 });
-userSchema.index({ email: 1, "lastLoginDevice.deviceId": 1 });
 
 // TTL Index for permanent deletion of soft-deleted accounts
 userSchema.index(
@@ -248,7 +246,6 @@ userSchema.pre("save", async function () {
 	this.lastPasswordChangedAt = new Date();
 });
 
-
 // Pre-save: Update verification status
 userSchema.pre("save", function () {
 	if (this.isModified("isVerified") && this.isVerified && !this.verifiedAt) {
@@ -275,7 +272,8 @@ userSchema.pre("save", function () {
 userSchema.methods.comparePassword = async function (
 	candidatePassword: string,
 ): Promise<boolean> {
-	return bcrypt.compare(candidatePassword, this.passwordHash);
+	const result = await bcrypt.compare(candidatePassword, this.passwordHash);
+	return result;
 };
 
 // Check if password was used before
@@ -330,6 +328,9 @@ userSchema.methods.updateLoginActivity = async function (
 	this.loginCount += 1;
 	this.activeSessions += 1;
 
+	if (!this.lastLoginDevice) {
+		this.lastLoginDevice = [];
+	}
 	// Parse user agent (basic implementation)
 	this.lastLoginDevice.push({
 		userAgent,
