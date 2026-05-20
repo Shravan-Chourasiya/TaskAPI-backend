@@ -67,9 +67,10 @@ export const otpSchema = z.object({
 // Update details schema
 export const updateDetailsSchema = z
 	.object({
-		fieldToUpdate: z.enum(["username","profile", "email", "password", "profile"]),
+		fieldToUpdate: z.enum(["username","profile", "email", "password", "forgotPassword", "profile"]),
 		newValue: z.string().min(5, "New value required"),
 		password: passwordSchema,
+		email: emailSchema.optional(),
 	})
 	.refine(
 		(data) => {
@@ -81,6 +82,12 @@ export const updateDetailsSchema = z
 				return emailSchema.safeParse(data.newValue).success;
 			}
 			if (data.fieldToUpdate === "password") {
+				return passwordSchema.safeParse(data.newValue).success;
+			}
+			if (data.fieldToUpdate === "forgotPassword") {
+				if(!data.email) {
+					return false; // Email is required for forgot password flow
+				}
 				return passwordSchema.safeParse(data.newValue).success;
 			}
 			if (data.fieldToUpdate === "profile") {

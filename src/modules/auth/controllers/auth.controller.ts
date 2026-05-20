@@ -42,7 +42,7 @@ export async function registerController(
 		if (existingUnverifiedUser) {
 			const emailSubject = emailPurposeMapper("verifyEmailOR");
 			const otp = generateOTP();
-			const html = getOtpHTML(otp, "resend_otp");
+			const html = getOtpHTML(otp, "resendOtp");
 
 			const mailSuccess = await sendVerificationEmail(
 				config.GMAIL_USER_EMAIL,
@@ -265,7 +265,7 @@ export async function loginController(
 			secure: true,
 			sameSite: "lax",
 			maxAge: 600000,
-		});	
+		});
 		return res.status(200).json({
 			message: "User Logged in successfully!",
 			data: {
@@ -274,7 +274,6 @@ export async function loginController(
 				status: isUser.status,
 				role: isUser.roles,
 			},
-
 		});
 	} catch (error) {
 		next(error);
@@ -376,7 +375,7 @@ export async function tokenRotationController(
 			secure: true,
 			sameSite: "lax",
 			maxAge: 600000,
-		});	
+		});
 		res.status(200).json({
 			message: "AccessToken Refreshed Successfully !",
 		});
@@ -615,11 +614,11 @@ export async function recoverDeletedAccountController(
 				.json({ message: "Account is not Scheduled to be Deleted!" });
 		}
 		const otp = generateOTP();
-		const html = getOtpHTML(otp, "account_recovery");
+		const html = getOtpHTML(otp, "accountRecovery");
 		const mailSuccess = await sendVerificationEmail(
 			config.GMAIL_USER_EMAIL,
 			user.email,
-			"Account Recovery Verification on TaskAPI",
+			emailPurposeMapper("accountRecovery"),
 			html,
 		);
 		if (!mailSuccess) {
@@ -630,7 +629,7 @@ export async function recoverDeletedAccountController(
 		const otpStoreSuccess = await otpService.storeOTP(
 			email,
 			otp,
-			"account_recovery",
+			"accountRecovery",
 			user._id.toString(),
 		);
 		if (!otpStoreSuccess.success) {
@@ -785,6 +784,58 @@ export async function verificationController(
 			}
 			user.passwordHash = otpResult.newValue;
 			user.isVerified = true;
+			await sessionModel.revokeAllUserSessions(
+				user._id.toString(),
+				"Password Reset",
+			);
+			await user.save();
+			return res.status(200).json({
+				message:
+					"Password Updated Successfully! You can now login to your account!",
+			});
+		} else if (req.query.purpose === "fr-pa") {
+			const otpResult = await otpService.verifyOTP(
+				email,
+				otp,
+				"forgotPassword",
+			);
+
+			if (!otpResult.success) {
+				return res.status(400).json({ message: otpResult.message });
+			}
+			if (!otpResult.newValue) {
+				return res
+					.status(400)
+					.json({ message: "New password value not found in OTP data." });
+			}
+			const userId = otpResult.userId;
+			if (!userId) {
+				return res.status(400).json({
+					message:
+						"Invalid OTP verification attempt.Please try registering after some Time.",
+				});
+			}
+			const user = await userModel.findOne({ _id: userId });
+			if (!user) {
+				return res.status(404).json({ message: "User Not Found!" });
+			}
+			if (!user.isVerified) {
+				return res.status(400).json({ message: "Email Not Verified!" });
+			}
+			const isSameAsOldPassword = await user.isPasswordReused(
+				otpResult.newValue,
+			);
+			if (isSameAsOldPassword) {
+				return res
+					.status(400)
+					.json({ message: "New Password cannot be same as last  password!" });
+			}
+			user.passwordHash = otpResult.newValue;
+			user.isVerified = true;
+			await sessionModel.revokeAllUserSessions(
+				user._id.toString(),
+				"Password Reset",
+			);
 			await user.save();
 			return res.status(200).json({
 				message:
@@ -882,6 +933,63 @@ export async function resendOtpController(
 
 		return res.status(200).json({
 			message: "OTP resent successfully! Please check your email.",
+		});
+	} catch (error) {
+		next(error);
+	}
+}
+
+export async function forgotPasswordController(
+	req: Request,
+	res: Response,
+	next: NextFunction,
+) {
+	try {
+		const {fieldToUpdate="forgotPassword", email,password,newValue }: z.infer<typeof updateDetailsSchema> = req.body;
+		if(!email || !password || !newValue){
+			return res.status(400).json({message:"Email, Password and New Value are required!"});
+		}
+		const user = await userModel.findOne({ email });
+		if (!user) {
+			return res.status(404).json({ message: "User Not Found!" });
+		}
+		const isPasswordCorrect = await user.comparePassword(password);
+		if (!isPasswordCorrect) {
+			return res.status(403).json({ message: "UnAuthorized: Invalid Password.Try Again!" });
+		}
+		const otp = generateOTP();
+		const html = getOtpHTML(otp, "resetPassword");
+
+		const mailSuccess = await sendVerificationEmail(
+			config.GMAIL_USER_EMAIL,
+			user.email,
+			emailPurposeMapper(fieldToUpdate),
+			html,
+		);
+
+		if (!mailSuccess) {
+			return res.status(503).json({
+				message: "Failed to send verification email. Please try again later.",
+			});
+		}
+
+		const otpStoreSuccess = await otpService.storeOTP(
+			String(email),
+			otp,
+			fieldToUpdate,
+			user._id.toString(),
+			newValue
+		);
+
+		if (!otpStoreSuccess.success) {
+			return res.status(500).json({
+				message: "Failed to store OTP. Please try again later.",
+			});
+		}
+
+		return res.status(200).json({
+			message:
+				"OTP Sent to your Email! Complete OTP Verification to reset your password!",
 		});
 	} catch (error) {
 		next(error);

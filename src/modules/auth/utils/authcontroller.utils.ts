@@ -6,10 +6,14 @@ export const emailPurposeMapper = (purpose: string): string => {
 			return "Email Verification for Email Update on TaskAPI";
 		case "resetPassword":
 			return "Password Reset Verification for Your TaskAPI Account";
-		case "account_recovery":
+		case "accountRecovery":
 			return "Account Recovery Verification for Your TaskAPI Account";
-		case "resend_otp":
+		case "resendOtp":
 			return "OTP Verification for Your TaskAPI Account";
+		case "forgotPassword":
+			return "Password Reset Verification for Your TaskAPI Account";
+		case "deleteAccount":
+			return "Account Deletion Scheduled for Your TaskAPI Account";
 		default:
 			return "Email Verification";
 	}
