@@ -15,6 +15,10 @@
     // "types": ["node"],
     // and npm install -D @types/node
 
+    // Module Interop
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+
     // Other Outputs
     "sourceMap": true,
     "declaration": true,
@@ -34,7 +38,6 @@
 
     // Recommended Options
     "strict": true,
-    "verbatimModuleSyntax": true,
     "isolatedModules": true,
     "noUncheckedSideEffectImports": true,
     "moduleDetection": "force",

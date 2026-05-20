@@ -19,6 +19,7 @@ export const accessTokenHandler = asyncErrorHandler(
 		const accessToken = req.cookies.acToken;
 		if (!accessToken) {
 			return res.status(401).json({
+				tokenExpired:true,
 				success: false,
 				error: "Unauthorized",
 				message: "Access token not found",
@@ -27,11 +28,17 @@ export const accessTokenHandler = asyncErrorHandler(
 
 		// Verify JWT signature and expiry (throws error if invalid)
 		const decoded = jwt.verify(accessToken, config.ACCESS_TOKEN_JWT_SECRET) as JwtPayload;
+		if (!decoded) {
+			return res.status(401).json({
+				tokenExpired: true,
+				success: false,
+				error: "InvalidToken",
+				message: "Invalid access token",
+			});
+		}
 
-		// Attach userID to request for downstream use
 		req.userID = decoded.id;
-		req.sessionId = decoded.sessionId; // Optional: if you include sessionId in JWT
-
+		req.sessionId = decoded.sessionId;
 		next();
 	},
 );
@@ -45,6 +52,7 @@ export const refreshTokenHandler = asyncErrorHandler(
 		const refreshToken = req.cookies.rfToken;
 		if (!refreshToken) {
 			return res.status(401).json({
+				tokenExpired: true,
 				success: false,
 				error: "Unauthorized",
 				message: "Refresh token not found",
@@ -65,6 +73,7 @@ export const refreshTokenHandler = asyncErrorHandler(
 
 		if (!session) {
 			return res.status(401).json({
+				tokenExpired: true,
 				success: false,
 				error: "SessionNotFound",
 				message: "Session not found or revoked",
@@ -79,6 +88,7 @@ export const refreshTokenHandler = asyncErrorHandler(
 
 		if (!isTokenValid) {
 			return res.status(401).json({
+				tokenExpired: true,
 				success: false,
 				error: "InvalidToken",
 				message: "Invalid refresh token",
@@ -99,6 +109,7 @@ export const refreshTokenHandler = asyncErrorHandler(
 			);
 
 			return res.status(401).json({
+				tokenExpired: true,
 				success: false,
 				error: "TokenTheftDetected",
 				message: "Security alert: All sessions revoked. Please login again.",
@@ -110,6 +121,7 @@ export const refreshTokenHandler = asyncErrorHandler(
 			await session.revoke("Token expired");
 
 			return res.status(401).json({
+				tokenExpired: true,
 				success: false,
 				error: "TokenExpired",
 				message: "Refresh token expired",
@@ -137,6 +149,7 @@ export const strictAuthHandler = asyncErrorHandler(
 
 		if (!accessToken) {
 			return res.status(401).json({
+				tokenExpired: true,
 				success: false,
 				error: "Unauthorized",
 				message: "Access token required",
@@ -154,6 +167,7 @@ export const strictAuthHandler = asyncErrorHandler(
 
 		if (!session) {
 			return res.status(401).json({
+				tokenExpired: true,
 				success: false,
 				error: "SessionInvalid",
 				message: "Session expired or revoked",

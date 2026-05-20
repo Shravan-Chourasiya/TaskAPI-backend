@@ -271,7 +271,10 @@ export async function loginController(
 			data: {
 				username: isUser.username,
 				email: isUser.email,
+				status: isUser.status,
+				role: isUser.roles,
 			},
+
 		});
 	} catch (error) {
 		next(error);

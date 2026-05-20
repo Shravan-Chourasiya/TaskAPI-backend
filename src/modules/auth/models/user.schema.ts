@@ -3,8 +3,8 @@ import type {
 	UserType,
 	UserStaticMethods,
 } from "../../../Types/mongo_models/user.type.js";
-import crypto from "crypto";
-import bcrypt from "bcryptjs";
+import * as crypto from "crypto";
+import * as bcrypt from "bcryptjs";
 
 export const userSchema = new mongoose.Schema(
 	{
