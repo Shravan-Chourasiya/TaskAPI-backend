@@ -6,7 +6,7 @@ const router = express.Router();
 
 router.get("/is-user",accessTokenHandler,generalRouter.isUserController);
 
-router.get('./health',generalRouter.healthCheckController);
+router.get('/health',generalRouter.healthCheckController);
 
 
 export { router as generalRouter };
