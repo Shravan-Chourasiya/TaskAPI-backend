@@ -692,7 +692,11 @@ export async function verificationController(
 ) {
 	try {
 		const { otp, email }: z.infer<typeof otpSchema> = req.body;
-		if (req.query.purpose === "ve-em-or") {
+		const purposeValue = req.query.purpose;
+		if (!purposeValue || typeof purposeValue !== "string") {
+			return res.status(400).json({ message: "OTP purpose is required!" });
+		}
+		if (purposeValue === "ve-em-or") {
 			const otpResult = await otpService.verifyOTP(email, otp, "verifyEmailOR");
 			if (!otpResult.success) {
 				return res.status(400).json({ message: otpResult.message });
@@ -717,7 +721,7 @@ export async function verificationController(
 				message:
 					"Email Verified Successfully! You can now login to your account!",
 			});
-		} else if (req.query.purpose === "ve-em-up") {
+		} else if (purposeValue === "ve-em-up") {
 			const otpResult = await otpService.verifyOTP(email, otp, "verifyEmailUP");
 
 			if (!otpResult.success) {
@@ -749,7 +753,7 @@ export async function verificationController(
 				message:
 					"Email Updated Successfully! You can now login to your account!",
 			});
-		} else if (req.query.purpose === "re-pa") {
+		} else if (purposeValue === "re-pa") {
 			const otpResult = await otpService.verifyOTP(email, otp, "resetPassword");
 
 			if (!otpResult.success) {
@@ -793,7 +797,7 @@ export async function verificationController(
 				message:
 					"Password Updated Successfully! You can now login to your account!",
 			});
-		} else if (req.query.purpose === "fr-pa") {
+		} else if (purposeValue === "fr-pa") {
 			const otpResult = await otpService.verifyOTP(
 				email,
 				otp,
@@ -803,45 +807,15 @@ export async function verificationController(
 			if (!otpResult.success) {
 				return res.status(400).json({ message: otpResult.message });
 			}
-			if (!otpResult.newValue) {
-				return res
-					.status(400)
-					.json({ message: "New password value not found in OTP data." });
-			}
-			const userId = otpResult.userId;
-			if (!userId) {
-				return res.status(400).json({
-					message:
-						"Invalid OTP verification attempt.Please try registering after some Time.",
-				});
-			}
-			const user = await userModel.findOne({ _id: userId });
-			if (!user) {
-				return res.status(404).json({ message: "User Not Found!" });
-			}
-			if (!user.isVerified) {
-				return res.status(400).json({ message: "Email Not Verified!" });
-			}
-			const isSameAsOldPassword = await user.isPasswordReused(
-				otpResult.newValue,
-			);
-			if (isSameAsOldPassword) {
-				return res
-					.status(400)
-					.json({ message: "New Password cannot be same as last  password!" });
-			}
-			user.passwordHash = otpResult.newValue;
-			user.isVerified = true;
-			await sessionModel.revokeAllUserSessions(
-				user._id.toString(),
-				"Password Reset",
-			);
-			await user.save();
 			return res.status(200).json({
 				message:
-					"Password Updated Successfully! You can now login to your account!",
+					"OTP Verified Successfully! Complete Password Reset Procedure to reset your password!",
+				data: {
+					userId: otpResult.userId,
+					userEmail: email,
+				},
 			});
-		} else if (req.query.purpose === "ac-re") {
+		} else if (purposeValue === "ac-re") {
 			const otpResult = await otpService.verifyOTP(
 				email,
 				otp,
@@ -939,23 +913,20 @@ export async function resendOtpController(
 	}
 }
 
-export async function forgotPasswordController(
+export async function forgotPasswordEmailController(
 	req: Request,
 	res: Response,
 	next: NextFunction,
 ) {
 	try {
-		const {fieldToUpdate="forgotPassword", email,password,newValue }: z.infer<typeof updateDetailsSchema> = req.body;
-		if(!email || !password || !newValue){
-			return res.status(400).json({message:"Email, Password and New Value are required!"});
+		const { email } = req.body;
+		const fieldToUpdate = "forgotPassword";
+		if (!email) {
+			return res.status(400).json({ message: "Email is required!" });
 		}
 		const user = await userModel.findOne({ email });
 		if (!user) {
 			return res.status(404).json({ message: "User Not Found!" });
-		}
-		const isPasswordCorrect = await user.comparePassword(password);
-		if (!isPasswordCorrect) {
-			return res.status(403).json({ message: "UnAuthorized: Invalid Password.Try Again!" });
 		}
 		const otp = generateOTP();
 		const html = getOtpHTML(otp, "resetPassword");
@@ -972,24 +943,66 @@ export async function forgotPasswordController(
 				message: "Failed to send verification email. Please try again later.",
 			});
 		}
-
 		const otpStoreSuccess = await otpService.storeOTP(
-			String(email),
+			email,
 			otp,
-			fieldToUpdate,
+			"forgotPassword",
 			user._id.toString(),
-			newValue
 		);
 
 		if (!otpStoreSuccess.success) {
 			return res.status(500).json({
 				message: "Failed to store OTP. Please try again later.",
+				success: false
 			});
 		}
 
 		return res.status(200).json({
 			message:
 				"OTP Sent to your Email! Complete OTP Verification to reset your password!",
+			data: { email },
+		});
+	} catch (error) {
+		next(error);
+	}
+}
+
+export async function forgotPasswordUpdateController(
+	req: Request,
+	res: Response,
+	next: NextFunction,
+) {
+	try {
+		const { userId, userEmail, newPassword } = req.body;
+		if (!userEmail || !newPassword) {
+			return res
+				.status(400)
+				.json({ message: "Email	 and New Password are required!" });
+		}
+		const user = await userModel.findOne({ _id: userId, email: userEmail });
+		if (!user) {
+			return res.status(404).json({ message: "User Not Found!" });
+		}
+		if (!user.isVerified) {
+			return res.status(400).json({ message: "Email Not Verified!" });
+		}
+		const isSameAsOldPassword = await user.isPasswordReused(newPassword);
+		if (isSameAsOldPassword) {
+			return res
+				.status(400)
+				.json({ message: "New Password cannot be same as last  password!" });
+		}
+		user.passwordHash = newPassword;
+		user.isVerified = true;
+		await sessionModel.revokeAllUserSessions(
+			user._id.toString(),
+			"Password Reset",
+		);
+		await user.save();
+		return res.status(200).json({
+			message:
+				"Password Updated Successfully! You can now login to your account!",
+			success: true,
 		});
 	} catch (error) {
 		next(error);
