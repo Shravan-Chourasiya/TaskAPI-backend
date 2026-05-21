@@ -101,6 +101,12 @@ export const updateDetailsSchema = z
 		},
 	);
 
+export const forgotPasswordUpdateSchema = z.object({
+	userId: z.string().min(1, "User ID is required"),
+	userEmail: emailSchema,
+	newPassword: passwordSchema,
+})
+
 // Resend OTP schema
 export const otpResendSchema = z.object({
 	email: emailSchema,

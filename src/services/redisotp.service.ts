@@ -50,12 +50,9 @@ export const otpService = {
 			createdAt: Date.now(),
 			expiresAt: Date.now() + ttl * 1000,
 		};
-
+		console.warn(`Storing OTP with key :: ${key}`);
 		// Store in Redis with TTL
 		await redisClient.setex(key, ttl, JSON.stringify(data));
-		console.warn(
-			`OTP stored for ${email} with purpose ${purpose} (expires in ${ttl} seconds)`,
-		);
 		return { success: true };
 	},
 
@@ -72,6 +69,7 @@ export const otpService = {
 		purpose: string,
 	): Promise<{ success: boolean; message: string; userId?: string ,newValue?: string}> {
 		const key = `otp:${email.toLowerCase()}:${purpose}`;
+		console.warn(`Verifying OTP for key :: ${key}`);
 		const rawData = await redisClient.get(key);
 		const data = rawData ? JSON.parse(rawData) : null;
 		if (!data) {
