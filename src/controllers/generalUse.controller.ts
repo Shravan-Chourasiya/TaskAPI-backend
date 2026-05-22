@@ -25,7 +25,8 @@ export const isUserController = async (
 			username: user.username,
 			email: user.email,
 			status: user.status,
-			role: user.roles
+			role: user.roles,
+			profile: user.profile
 		};
 		res.status(200).json({isUser: true, message: "User is verified", user: userObj });
 	} catch (error) {

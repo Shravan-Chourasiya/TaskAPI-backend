@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 import type {
 	SessionType,
 	SessionStaticMethods,
-} from "../../../Types/mongo_models/session.type.js";
+} from "../../../types/mongo_models/session.type.js";
 
 export const sessionSchema = new mongoose.Schema(
 	{

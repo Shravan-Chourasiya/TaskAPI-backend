@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import type { SubscriptionType } from "../../../../Types/mongo_models/subscription.type.js";
+import type { SubscriptionType } from "../../../../types/mongo_models/subscription.type.js";
 
 const subscriptionSchema = new mongoose.Schema(
 	{
@@ -102,7 +102,7 @@ subscriptionSchema.virtual("isSubscriptionActive").get(function () {
 });
 
 subscriptionSchema.methods.comparePlans = function (
-	targetPlan:"Free" | "Basic" | "Pro",
+	targetPlan: "Free" | "Basic" | "Pro",
 ): boolean {
 	const planLevel: { [key: string]: number } = { Free: 1, Basic: 2, Pro: 3 };
 	const currentLevel = planLevel[this.subscriptionType];

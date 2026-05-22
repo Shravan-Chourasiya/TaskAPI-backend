@@ -1,6 +1,6 @@
 import nodemailer from "nodemailer";
 import { config } from "../configs/app.config.js";
-import type { NodemailerError } from "../Types/nodemailer.interface.js";
+import { NodemailerError } from "../types/errors.interface.js";
 
 const transporter = nodemailer.createTransport({
 	service: "gmail",
@@ -26,7 +26,6 @@ export async function sendVerificationEmail(
 			subject: subject,
 			html: html,
 		});
-		console.log("Email sent successfully:", info.messageId);
 		if (info.response) {
 			return info.messageId;
 		}

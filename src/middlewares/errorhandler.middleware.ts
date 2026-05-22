@@ -1,5 +1,5 @@
 import jwt from "jsonwebtoken";
-import type { AppError } from "../Types/errors.interface.js";
+import type { AppError } from "../types/errors.interface.js";
 
 interface ClassErrReturnType {
 	status: number;
