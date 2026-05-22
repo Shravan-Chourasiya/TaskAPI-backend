@@ -11,14 +11,19 @@ import {
 	loginDeleteRecoverAccSchema,
 	otpResendSchema,
 	otpSchema,
+	// phoneGetNumberSchema,
+	// phoneVerificationSchema,
 	registerSchema,
 	updateDetailsSchema,
+	profileUpdateSchema,
 } from "../libs/zod/auth.zodschema.js";
 import {
 	authRateLimiter,
 	otpGenerationLimiter,
 	otpVerificationLimiter,
+	profileUpdateLimiter,
 } from "../middlewares/ratelimiting.middleware.js";
+import { fileUploadMiddleware } from "../middlewares/fileupload.middleware.js";
 
 const router = express.Router();
 
@@ -50,6 +55,15 @@ router.patch(
 	ZodValidatorMiddleware(updateDetailsSchema),
 	accessTokenHandler,
 	authControllers.updateDetailsController,
+);
+
+router.patch(
+	"/profile/update",
+	accessTokenHandler,
+	fileUploadMiddleware,
+	profileUpdateLimiter,
+	ZodValidatorMiddleware(profileUpdateSchema),
+	authControllers.updateProfile,
 );
 
 router.delete(
@@ -94,5 +108,18 @@ router.post(
 	otpGenerationLimiter,
 	authControllers.resendOtpController,
 );
+
+// router.post(
+// 	"/phone/send-verification",
+// 	ZodValidatorMiddleware(phoneGetNumberSchema),
+// 	otpGenerationLimiter,
+// 	authControllers.getPhoneNumberController,
+// );
+
+// router.post('/phone/verify',
+// 	ZodValidatorMiddleware(phoneVerificationSchema),
+// 	otpVerificationLimiter,
+// 	authControllers.verifyPhoneController,
+// );
 
 export { router as authRouter };

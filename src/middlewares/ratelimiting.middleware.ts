@@ -86,7 +86,7 @@ export const apiRateLimiter = rateLimit({
 // ============ AUTH RATE LIMITER (Login/Register) ============
 export const authRateLimiter = rateLimit({
 	windowMs: constants.AUTH_RL_TIME_WINDOW_MS, // 10 minutes
-	limit: constants.AUTH_RATE_LIMIT_MAX, 
+	limit: constants.AUTH_RATE_LIMIT_MAX,
 	standardHeaders: "draft-7",
 	legacyHeaders: false,
 	store: new RedisStore({
@@ -138,4 +138,22 @@ export const otpVerificationLimiter = rateLimit({
 	},
 	handler: rateLimitHandler,
 	skipSuccessfulRequests: true, // Only count failed verifications
+});
+
+export const profileUpdateLimiter = rateLimit({
+	windowMs: constants.UPDATE_RL_TIME_WINDOW_MS, // 2 minutes
+	limit: constants.UPDATE_RATE_LIMIT_MAX, // 1 profile update request per 2 min
+	standardHeaders: "draft-7",
+	legacyHeaders: false,
+	store: new RedisStore({
+		sendCommand,
+		prefix: "rl:profile:update:",
+	}),
+	keyGenerator: (req) => {
+		const email = req.body.email?.toLowerCase();
+		const ip = ipKeyGenerator((req.ip as string) || "unknown");
+		return email ? `email:${hashEmail(email)}` : `ip:${ip}`;
+	},
+	handler: rateLimitHandler,
+	skipFailedRequests: true, // Only count successful profile updates
 });

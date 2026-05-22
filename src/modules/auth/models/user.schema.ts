@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 import type {
 	UserType,
 	UserStaticMethods,
-} from "../../../Types/mongo_models/user.type.js";
+} from "../../../types/mongo_models/user.type.js";
 import * as crypto from "crypto";
 import * as bcrypt from "bcryptjs";
 
@@ -121,19 +121,21 @@ export const userSchema = new mongoose.Schema(
 				type: String,
 				maxlength: [500, "Bio cannot exceed 500 characters"],
 			},
-			phone: {
-				type: String,
-				match: [/^\+?[1-9]\d{1,14}$/, "Invalid phone number format"],
-			},
-			phoneVerified: {
-				type: Boolean,
-				default: false,
-			},
 			country: {
 				type: String,
 				trim: true,
 				maxlength: [100, "Country name cannot exceed 100 characters"],
 			},
+		},
+
+		phone: {
+			type: String,
+			match: [/^\+?[1-9]\d{1,14}$/, "Invalid phone number format"],
+			unique: true,
+		},
+		isPhoneVerified: {
+			type: Boolean,
+			default: false, 
 		},
 
 		roles: {

@@ -27,14 +27,14 @@ export type UserType = {
 	activeSessions: number;
 	laastActiveAt: Date;
 	profile: {
-		firstName: string;
-		lastName: string;
-		avatarUrl: string;
-		bio: string;
-		phone: string;
-		phoneVerified: boolean;
-		country: string;
+		firstName: string | undefined;
+		lastName: string | undefined;
+		avatarUrl: string | undefined;
+		bio: string | undefined;
+		country: string | undefined;
 	};
+	phone?:string;
+	isPhoneVerified: boolean;
 	roles: "user" | "admin" | "moderator" | "developer";
 	isDeleted: boolean;
 	deletedAt: Date;

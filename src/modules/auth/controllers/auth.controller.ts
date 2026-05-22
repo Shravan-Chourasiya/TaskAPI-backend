@@ -14,11 +14,14 @@ import type {
 	registerSchema,
 	usernameSchema,
 	updateDetailsSchema,
-	profileSchema,
+	phoneVerificationSchema,
+	profileUpdateSchema,
 } from "../../../libs/zod/auth.zodschema.js";
 import userModel from "../models/user.schema.js";
 import { otpService } from "../../../services/redisotp.service.js";
 import sessionModel from "../models/session.schema.js";
+import { sendVerificationSMS } from "../../../services/twilio.service.js";
+import { RequestWithFileUrl } from "../../../middlewares/fileupload.middleware.js";
 
 export async function registerController(
 	req: Request,
@@ -273,6 +276,7 @@ export async function loginController(
 				email: isUser.email,
 				status: isUser.status,
 				role: isUser.roles,
+				avatarUrl: isUser.profile?.avatarUrl,
 			},
 		});
 	} catch (error) {
@@ -443,7 +447,7 @@ export async function logoutController(
 }
 
 export async function updateDetailsController(
-	req: Request,
+	req: RequestWithFileUrl,
 	res: Response,
 	next: NextFunction,
 ) {
@@ -453,6 +457,7 @@ export async function updateDetailsController(
 			newValue,
 			password,
 		}: z.infer<typeof updateDetailsSchema> = req.body;
+
 		const decodedToken = jwt.verify(
 			req.cookies.acToken,
 			config.ACCESS_TOKEN_JWT_SECRET,
@@ -470,12 +475,9 @@ export async function updateDetailsController(
 				await user.updateOne({
 					username: newValue as z.infer<typeof usernameSchema>,
 				});
-				break;
-			case "profile":
-				await user.updateOne({
-					profile: newValue as z.infer<typeof profileSchema>,
+				return res.status(200).json({
+					message: "Username updated successfully!",
 				});
-				break;
 			case "email": {
 				const otp = generateOTP();
 				const html = getOtpHTML(otp, "verifyEmailUP");
@@ -543,6 +545,52 @@ export async function updateDetailsController(
 		return res.status(200).json({
 			message:
 				"Verification OTP sent to your email! Complete OTP verification to update your details!",
+		});
+	} catch (error) {
+		next(error);
+	}
+}
+
+export async function updateProfile(
+	req: RequestWithFileUrl,
+	res: Response,
+	next: NextFunction,
+) {
+	try {
+		const { newValue }: z.infer<typeof profileUpdateSchema> =
+			req.body;
+		const fileUrl = req.fileUrl;
+
+		const decodedToken = jwt.verify(
+			req.cookies.acToken,
+			config.ACCESS_TOKEN_JWT_SECRET,
+		) as JwtPayload;
+		const user = await userModel.findOne({ _id: decodedToken.id });
+		if (!user) {
+			return res.status(404).json({ message: "User Not Found!" });
+		}
+		// const isPasswordCorrect = await user.comparePassword(password);
+		// if (!isPasswordCorrect) {
+		// 	return res.status(403).json({ message: "Invalid Password.Try Again!" });
+		// }
+		console.warn("Received profile update request with data:", { newValue, fileUrl });
+		// Merge new profile data with existing, add avatar URL if uploaded
+		const profileUpdationDetails = {
+			...user.profile,
+			...newValue,
+			...(fileUrl && { avatarUrl: fileUrl }),
+		};
+		if(!profileUpdationDetails) {
+			return res.status(400).json({ message: "No valid profile data provided for update!" });
+		}
+		user.profile = profileUpdationDetails;
+		await user.save();
+		return res.status(200).json({
+			message: "Profile updated successfully!",
+			data: {
+				profile: user.profile,
+				avatarUrl: user.profile?.avatarUrl,
+			},
 		});
 	} catch (error) {
 		next(error);
@@ -678,6 +726,7 @@ export async function getUserAccountController(
 				email: user.email,
 				status: user.status,
 				role: user.roles,
+				avatarUrl: user.profile?.avatarUrl,
 			},
 		});
 	} catch (error) {
@@ -913,6 +962,71 @@ export async function resendOtpController(
 	}
 }
 
+export async function getPhoneNumberController(
+	req: Request,
+	res: Response,
+	next: NextFunction,
+) {
+	try {
+		const { phoneNumber } = req.body;
+		const otp = generateOTP();
+		const otpStoreResult = await otpService.storeOTP(
+			phoneNumber,
+			otp,
+			"phoneVerification",
+		);
+		if (!otpStoreResult.success) {
+			return res.status(500).json({
+				message:
+					otpStoreResult.message ||
+					"Failed to store OTP. Please try again later.",
+			});
+		}
+		await sendVerificationSMS(phoneNumber, otp);
+		console.warn("OTP for phone verification:", otp);
+
+		return res.status(200).json({
+			message:
+				"Phone number verification initiated! Please check your phone for the verification code.",
+		});
+	} catch (error) {
+		next(error);
+	}
+}
+
+export async function verifyPhoneController(
+	req: Request,
+	res: Response,
+	next: NextFunction,
+) {
+	try {
+		const { phoneNumber, otp }: z.infer<typeof phoneVerificationSchema> =
+			req.body;
+		const result = await otpService.verifyOTP(
+			phoneNumber,
+			otp,
+			"phoneVerification",
+		);
+		if (!result.success) {
+			return res.status(400).json({ message: result.message });
+		}
+		const user = await userModel.findOneAndUpdate(
+			{ phoneNumber },
+			{ isPhoneVerified: true },
+		);
+		if (!user) {
+			return res
+				.status(404)
+				.json({ message: "User Not Found! | Failed to verify phone number." });
+		}
+		return res.status(200).json({
+			message: "Phone verification successful!",
+		});
+	} catch (error) {
+		next(error);
+	}
+}
+
 export async function forgotPasswordEmailController(
 	req: Request,
 	res: Response,
@@ -953,7 +1067,7 @@ export async function forgotPasswordEmailController(
 		if (!otpStoreSuccess.success) {
 			return res.status(500).json({
 				message: "Failed to store OTP. Please try again later.",
-				success: false
+				success: false,
 			});
 		}
 

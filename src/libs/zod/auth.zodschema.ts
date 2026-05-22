@@ -33,13 +33,18 @@ export const passwordSchema = z
 	);
 
 export const profileSchema = z.object({
-	firstName:z.string().max(50, "First name too long").optional(),
+	firstName: z.string().max(50, "First name too long").optional(),
 	lastName: z.string().max(50, "Last name too long").optional(),
 	bio: z.string().max(160, "Bio too long").optional(),
-	avatarUrl: z.string().url("Invalid URL format").optional(),
-	phone: z.e164().regex(/^\+?[1-9]\d{1,14}$/, "Invalid phone number format").optional(),
 	country: z.string().max(100, "Country name too long").optional(),
+	city: z.string().max(100, "City name too long").optional(),
+	avatarUrl: z.string().url("Invalid URL format").optional(),
 });
+
+export const phoneNumberSchema = z
+	.string()
+	.e164()
+	.regex(/^\+?[1-9]\d{1,14}$/, "Invalid phone number format");
 
 // Register schema
 export const registerSchema = z.object({
@@ -61,13 +66,36 @@ export const otpSchema = z.object({
 		.length(6, "OTP must be exactly 6 digits")
 		.regex(/^\d{6}$/, "OTP must contain only digits"),
 
-	email: emailSchema,	
-	});
+	email: emailSchema,
+});
+
+// Phone get number schema
+export const phoneGetNumberSchema = z.object({
+	phoneNumber: phoneNumberSchema,
+});
+
+// Phone verification schema
+export const phoneVerificationSchema = z.object({
+	phoneNumber: z
+		.e164()
+		.regex(/^\+?[1-9]\d{1,14}$/, "Invalid phone number format"),
+	otp: z
+		.string()
+		.length(6, "OTP must be exactly 6 digits")
+		.regex(/^\d{6}$/, "OTP must contain only digits"),
+});
 
 // Update details schema
 export const updateDetailsSchema = z
 	.object({
-		fieldToUpdate: z.enum(["username","profile", "email", "password", "forgotPassword", "profile"]),
+		fieldToUpdate: z.enum([
+			"username",
+			"profile",
+			"email",
+			"password",
+			"forgotPassword",
+			"profile",
+		]),
 		newValue: z.string().min(5, "New value required"),
 		password: passwordSchema,
 		email: emailSchema.optional(),
@@ -85,7 +113,7 @@ export const updateDetailsSchema = z
 				return passwordSchema.safeParse(data.newValue).success;
 			}
 			if (data.fieldToUpdate === "forgotPassword") {
-				if(!data.email) {
+				if (!data.email) {
 					return false; // Email is required for forgot password flow
 				}
 				return passwordSchema.safeParse(data.newValue).success;
@@ -101,11 +129,17 @@ export const updateDetailsSchema = z
 		},
 	);
 
+// Profile Update schema
+export const profileUpdateSchema = z.object({
+	newValue: profileSchema,
+});
+
+// Forgot password update schema
 export const forgotPasswordUpdateSchema = z.object({
 	userId: z.string().min(1, "User ID is required"),
 	userEmail: emailSchema,
 	newPassword: passwordSchema,
-})
+});
 
 // Resend OTP schema
 export const otpResendSchema = z.object({
