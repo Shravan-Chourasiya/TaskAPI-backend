@@ -19,6 +19,18 @@ export const sessionSchema = new mongoose.Schema(
 			index: true,
 		},
 
+		activeSessionCount:{
+			type:Number,
+			default:0,
+			max:[5,"Cannot have more than 5 concurrent devices"]
+		},
+
+		sessionDevices: {
+			type: [String],
+			default: [],
+			max: [5, "Cannot have more than 5 concurrent devices"],
+		},
+
 		userAgent: {
 			type: String,
 			required: [true, "User agent is required"],
@@ -125,6 +137,15 @@ sessionSchema.virtual("isActive").get(function () {
 	);
 });
 
+// ============ MIDDLEWARES ============
+
+sessionSchema.pre("save", function () {
+	if (this.isNew) {
+		this.activeSessionCount = (this.activeSessionCount ?? 0) + 1;
+	}
+});
+
+
 // ============ INSTANCE METHODS ============
 
 /**
@@ -146,6 +167,7 @@ sessionSchema.methods.updateActivity = async function (): Promise<void> {
 	this.lastActivityAt = new Date();
 	await this.save();
 };
+
 
 /**
  * Check if session is valid (active, not revoked, and not expired).

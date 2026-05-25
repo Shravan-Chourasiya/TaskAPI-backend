@@ -25,7 +25,9 @@ export type UserType = {
 		deviceId: string;
 	};
 	activeSessions: number;
-	laastActiveAt: Date;
+	sessionDevices: string[];
+
+	lastActiveAt: Date;
 	profile: {
 		firstName: string | undefined;
 		lastName: string | undefined;
@@ -33,7 +35,7 @@ export type UserType = {
 		bio: string | undefined;
 		country: string | undefined;
 	};
-	phone?:string;
+	phone?: string;
 	isPhoneVerified: boolean;
 	roles: "user" | "admin" | "moderator" | "developer";
 	isDeleted: boolean;
@@ -61,7 +63,11 @@ export interface UserInstanceMethods {
 }
 
 // Static methods interface
-export interface UserStaticMethods extends Model<UserType, object, UserInstanceMethods> {
+export interface UserStaticMethods extends Model<
+	UserType,
+	object,
+	UserInstanceMethods
+> {
 	findActive(): Promise<UserDocument[]>;
 	findByEmail(email: string): Promise<UserDocument | null>;
 	findByUsername(username: string): Promise<UserDocument | null>;
@@ -76,4 +82,6 @@ export interface UserStaticMethods extends Model<UserType, object, UserInstanceM
 }
 
 // Combined document type
-export type UserDocument = Document<unknown, object, UserType> & UserType & UserInstanceMethods;
+export type UserDocument = Document<unknown, object, UserType> &
+	UserType &
+	UserInstanceMethods;

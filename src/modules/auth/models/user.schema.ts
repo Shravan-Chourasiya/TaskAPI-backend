@@ -100,6 +100,12 @@ export const userSchema = new mongoose.Schema(
 			default: 0,
 			max: [5, "Cannot have more than 5 concurrent devices"],
 		},
+		
+		sessionDevices: {
+			type: [String],
+			default: [],
+			max: [5, "Cannot have more than 5 concurrent devices"],
+		},
 
 		lastActiveAt: {
 			type: Date,
@@ -131,11 +137,11 @@ export const userSchema = new mongoose.Schema(
 		phone: {
 			type: String,
 			match: [/^\+?[1-9]\d{1,14}$/, "Invalid phone number format"],
-			unique: true,
+			default: "",
 		},
 		isPhoneVerified: {
 			type: Boolean,
-			default: false, 
+			default: false,
 		},
 
 		roles: {
@@ -328,7 +334,6 @@ userSchema.methods.updateLoginActivity = async function (
 	this.lastLoginAt = new Date();
 	this.lastActiveAt = new Date();
 	this.loginCount += 1;
-	this.activeSessions += 1;
 
 	if (!this.lastLoginDevice) {
 		this.lastLoginDevice = [];

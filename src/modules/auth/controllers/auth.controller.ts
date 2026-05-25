@@ -22,6 +22,7 @@ import { otpService } from "../../../services/redisotp.service.js";
 import sessionModel from "../models/session.schema.js";
 import { sendVerificationSMS } from "../../../services/twilio.service.js";
 import { RequestWithFileUrl } from "../../../middlewares/fileupload.middleware.js";
+import { v4 as uuidv4 } from "uuid";
 
 export async function registerController(
 	req: Request,
@@ -142,6 +143,7 @@ export async function loginController(
 					"Already Logged In! Please Logout from current session to login again!",
 			});
 		}
+		const deviceId = req.cookies.devid;
 
 		const isUser = await userModel.findOne({ email }).select("+passwordHash");
 		if (!isUser) {
@@ -169,42 +171,36 @@ export async function loginController(
 					"Account Scheduled for Deletion! Complete Account Recovery Procedure to recover your account!",
 			});
 		}
-
-		// Generate consistent deviceId from user agent
-		const deviceId = crypto
-			.createHash("sha256")
-			.update(req.headers["user-agent"] || "unknown")
-			.digest("hex");
-
-		const tokenFamily = crypto.randomBytes(16).toString("hex");
-
-		const refreshToken = jwt.sign(
-			{
-				id: isUser._id,
-				tokenFamily: tokenFamily,
-				deviceId: deviceId,
-				type: "refresh",
-			},
-			config.REFRESH_TOKEN_JWT_SECRET,
-			{
-				expiresIn: "7d",
-			},
-		);
-
-		const accessToken = jwt.sign(
-			{ id: isUser._id, type: "access" },
-			config.ACCESS_TOKEN_JWT_SECRET,
-			{ expiresIn: "10m" },
-		);
-
-		const rfTokenHash = await bcrypt.hash(refreshToken, 12);
 		// Check if session exists for this device
 		const existingSession = await sessionModel.findOne({
 			userId: isUser._id.toString(),
+			isRevoked: false,
 			deviceId: deviceId,
 		});
 
 		if (existingSession) {
+			const tokenFamily = crypto.randomBytes(16).toString("hex");
+
+			const refreshToken = jwt.sign(
+				{
+					id: isUser._id,
+					tokenFamily: tokenFamily,
+					deviceId: deviceId,
+					type: "refresh",
+				},
+				config.REFRESH_TOKEN_JWT_SECRET,
+				{
+					expiresIn: "7d",
+				},
+			);
+
+			const accessToken = jwt.sign(
+				{ id: isUser._id, type: "access" },
+				config.ACCESS_TOKEN_JWT_SECRET,
+				{ expiresIn: "10m" },
+			);
+
+			const rfTokenHash = await bcrypt.hash(refreshToken, 12);
 			await existingSession.updateOne({
 				refreshTokenHash: rfTokenHash,
 				tokenFamily,
@@ -213,7 +209,49 @@ export async function loginController(
 				lastActivityAt: new Date(),
 				refreshTokenExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
 			});
+			// Don't increment activeSessions - existing session reused
+
+			res.cookie("acToken", accessToken, {
+				httpOnly: true,
+				secure: true,
+				sameSite: "lax",
+				maxAge: 600000,
+			});
+			return res.status(200).json({
+				success: true,
+				message: "User Logged in successfully!",
+				data: {
+					username: isUser.username,
+					profile: isUser.profile,
+					status: isUser.status,
+					role: isUser.roles,
+				},
+			});
 		} else {
+			const deviceId = uuidv4();
+			const tokenFamily = crypto.randomBytes(16).toString("hex");
+
+			const refreshToken = jwt.sign(
+				{
+					id: isUser._id,
+					tokenFamily: tokenFamily,
+					deviceId: deviceId,
+					type: "refresh",
+				},
+				config.REFRESH_TOKEN_JWT_SECRET,
+				{
+					expiresIn: "7d",
+				},
+			);
+
+			const accessToken = jwt.sign(
+				{ id: isUser._id, type: "access" },
+				config.ACCESS_TOKEN_JWT_SECRET,
+				{ expiresIn: "10m" },
+			);
+
+			const rfTokenHash = await bcrypt.hash(refreshToken, 12);
+			// Check if session exists for this device
 			const activeSessionCount = await sessionModel.countDocuments({
 				userId: isUser._id.toString(),
 				isRevoked: false,
@@ -225,7 +263,8 @@ export async function loginController(
 						"Maximum 5 devices allowed. Logout from another device first.",
 				});
 			}
-
+			isUser.sessionDevices.push(deviceId);
+			await isUser.save();
 			const newSession = await sessionModel.create([
 				{
 					userId: isUser._id.toString(),
@@ -238,6 +277,7 @@ export async function loginController(
 					tokenFamily,
 					refreshTokenHash: rfTokenHash,
 					isRevoked: false,
+					sessionDevices: [deviceId],
 					status: "active",
 					lastActivityAt: new Date(),
 					refreshTokenExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
@@ -249,36 +289,45 @@ export async function loginController(
 					message: "Failed to create session. Please try again later.",
 				});
 			}
-		}
-		await isUser.resetFailedLogin();
-		await isUser.updateLoginActivity(
-			req.ip as string,
-			req.headers["user-agent"] || "unknown",
-		);
-		await isUser.save();
+			// Increment activeSessions only for NEW session
+			isUser.activeSessions += 1;
 
-		res.cookie("rfToken", refreshToken, {
-			httpOnly: true,
-			secure: true,
-			sameSite: "lax",
-			maxAge: 604800000,
-		});
-		res.cookie("acToken", accessToken, {
-			httpOnly: true,
-			secure: true,
-			sameSite: "lax",
-			maxAge: 600000,
-		});
-		return res.status(200).json({
-			message: "User Logged in successfully!",
-			data: {
-				username: isUser.username,
-				email: isUser.email,
-				status: isUser.status,
-				role: isUser.roles,
-				avatarUrl: isUser.profile?.avatarUrl,
-			},
-		});
+			await isUser.resetFailedLogin();
+			await isUser.updateLoginActivity(
+				req.ip as string,
+				req.headers["user-agent"] || "unknown",
+			);
+			await isUser.save();
+
+			res.cookie("rfToken", refreshToken, {
+				httpOnly: true,
+				secure: true,
+				sameSite: "lax",
+				maxAge: 604800000,
+			});
+			res.cookie("acToken", accessToken, {
+				httpOnly: true,
+				secure: true,
+				sameSite: "lax",
+				maxAge: 600000,
+			});
+			res.cookie("devid", deviceId, {
+				httpOnly: true,
+				secure: true,
+				sameSite: "lax",
+				maxAge: 604800000 * 4,
+			});
+			return res.status(200).json({
+				message: "User Logged in successfully!",
+				data: {
+					username: isUser.username,
+					email: isUser.email,
+					status: isUser.status,
+					role: isUser.roles,
+					avatarUrl: isUser.profile?.avatarUrl,
+				},
+			});
+		}
 	} catch (error) {
 		next(error);
 	}
@@ -426,6 +475,13 @@ export async function logoutController(
 		}
 		await session.updateOne({ isRevoked: true });
 
+		// Decrement activeSessions count
+		const user = await userModel.findById(rfTokenDecoded.id);
+		if (user && user.activeSessions > 0) {
+			user.activeSessions -= 1;
+			await user.save();
+		}
+
 		res.clearCookie("rfToken", {
 			httpOnly: true,
 			secure: true,
@@ -557,8 +613,7 @@ export async function updateProfile(
 	next: NextFunction,
 ) {
 	try {
-		const { newValue }: z.infer<typeof profileUpdateSchema> =
-			req.body;
+		const { newValue }: z.infer<typeof profileUpdateSchema> = req.body;
 		const fileUrl = req.fileUrl;
 
 		const decodedToken = jwt.verify(
@@ -573,15 +628,20 @@ export async function updateProfile(
 		// if (!isPasswordCorrect) {
 		// 	return res.status(403).json({ message: "Invalid Password.Try Again!" });
 		// }
-		console.warn("Received profile update request with data:", { newValue, fileUrl });
+		console.warn("Received profile update request with data:", {
+			newValue,
+			fileUrl,
+		});
 		// Merge new profile data with existing, add avatar URL if uploaded
 		const profileUpdationDetails = {
 			...user.profile,
 			...newValue,
 			...(fileUrl && { avatarUrl: fileUrl }),
 		};
-		if(!profileUpdationDetails) {
-			return res.status(400).json({ message: "No valid profile data provided for update!" });
+		if (!profileUpdationDetails) {
+			return res
+				.status(400)
+				.json({ message: "No valid profile data provided for update!" });
 		}
 		user.profile = profileUpdationDetails;
 		await user.save();

@@ -8,7 +8,8 @@ export type SessionType = {
 	ipCountry?: string;
 	ipRegion?: string;
 	ipCity?: string;
-	accessTokenHash: string;
+	activeSessions: number;
+	sessionDevices: string[];
 	refreshTokenHash: string;
 	tokenFamily: string;
 	status: "active" | "revoked" | "expired";
