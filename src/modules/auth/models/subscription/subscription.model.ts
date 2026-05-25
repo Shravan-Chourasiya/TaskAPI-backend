@@ -87,7 +87,7 @@ subscriptionSchema.pre("save", function () {
 	}
 });
 
-subscriptionSchema.index({ userId: 1 }, { unique: true });
+subscriptionSchema.index({ userId: 1 });
 subscriptionSchema.index({ subscriptionStatus: 1, subscriptionEndDate: 1 });
 subscriptionSchema.index({ "transactionHistory.transactionId": 1 });
 

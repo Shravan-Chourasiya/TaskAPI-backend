@@ -12,23 +12,25 @@ const freePlanBuyController = async (
 	res: Response,
 	next: NextFunction,
 ) => {
-	const Session = await SubscriptionModel.db.startSession();
+	// const Session = await SubscriptionModel.db.startSession();
 	const {
-		userId,
 		subscriptionPlanDetails,
 	}: z.infer<typeof buySubscriptionSchema> = req.body;
 	try {
-		Session.startTransaction();
+		// Session.startTransaction();
+		const userId = (jwt.verify(req.cookies.acToken, config.ACCESS_TOKEN_JWT_SECRET) as JwtPayload).id;
 		const userSubData = await SubscriptionModel.findOne(
 			{ userId },
-			{ session: Session },
+			// { session: Session },
 		);
+		if(userSubData){
 		if (userSubData?.subscriptionType !== "Free") {
+			console.warn(userSubData);
 			return res.status(400).json({
 				message:
 					"You already have an active subscription for this plan or a higher plan",
 			});
-		}
+		}}
 
 		const transactionId = "txn_" + crypto.randomBytes(9).toString("hex");
 		const newSubscription = await SubscriptionModel.create(
@@ -37,7 +39,7 @@ const freePlanBuyController = async (
 					userId,
 					subscriptionType: subscriptionPlanDetails.planName,
 					subscriptionDurationMonths: subscriptionPlanDetails.duration,
-					paymentMethod: "Free Plan",
+					paymentMethod: "upiApp",
 					autoRenew: subscriptionPlanDetails.autoRenewStatus,
 					lastTransactionId: transactionId,
 					lastSubscribedAt: new Date(),
@@ -50,29 +52,29 @@ const freePlanBuyController = async (
 							paymentId: `free_plan_1_year_${userId}`,
 							amount: 0,
 							date: new Date(),
-							paymentMethod: "Free Plan",
+							paymentMethod: "upiApp",
 							status: "Completed",
 						},
 					],
 				},
 			],
-			{ session: Session },
+			// { session: Session },
 		);
 
 		if (!newSubscription) {
-			await Session.abortTransaction();
+			// await Session.abortTransaction();
 			return res.status(500).json({ message: "Failed to create subscription" });
 		}
-		await Session.commitTransaction();
+		// await Session.commitTransaction();
 		return res.status(201).json({
 			message: "Subscription purchased successfully",
 			subscription: newSubscription,
 		});
 	} catch (error) {
-		await Session.abortTransaction();
+		// await Session.abortTransaction();
 		next(error);
 	} finally {
-		await Session.endSession();
+		// await Session.endSession();
 	}
 };
 
@@ -81,34 +83,34 @@ export const buySubscriptionController = async (
 	res: Response,
 	next: NextFunction,
 ) => {
-	const Session = await SubscriptionModel.db.startSession();
+	// const Session = await SubscriptionModel.db.startSession();
+	// console.warn(req.body);
 	const {
 		subscriptionPlanDetails,
 	}: z.infer<typeof buySubscriptionSchema> = req.body;
 	try {
-		Session.startTransaction();
-		
-		const decoded= jwt.verify(req.cookies.token, config.ACCESS_TOKEN_JWT_SECRET) as JwtPayload;
-		const userId = decoded.userId;
-
+		// Session.startTransaction();
+		const decoded= jwt.verify(req.cookies.acToken, config.ACCESS_TOKEN_JWT_SECRET) as JwtPayload;
+		const userId = decoded.id
+		const userData = await userModel.findOne(
+			{ _id: userId },
+			// { session: Session },
+		);
+		if (!userData) {
+			return res.status(404).json({ message: "User not found" });
+		}
 		const isPlanFree = subscriptionPlanDetails.planName === "Free";
+
 		if (isPlanFree) {
 			return await freePlanBuyController(req, res, next);
 		}
-		const userData = await userModel.findOne(
-			{ _id: userId },
-			{ session: Session },
-		);
 		if (isPlanFree) {
 			console.error("free");
-		}
-		if (!userData) {
-			return res.status(404).json({ message: "User not found" });
 		}
 
 		const existingSubscription = await SubscriptionModel.findOne(
 			{ userId },
-			{ session: Session },
+			// { session: Session },
 		);
 		if (existingSubscription) {
 			const isActive = existingSubscription.isSubscriptionActive.isActive;
@@ -158,24 +160,24 @@ export const buySubscriptionController = async (
 					],
 				},
 			],
-			{ session: Session },
+			// { session: Session },
 		);
 
 		if (!newSubscription) {
-			await Session.abortTransaction();
+			// await Session.abortTransaction();
 			return res.status(500).json({ message: "Failed to create subscription" });
 		}
-		await Session.commitTransaction();
+		// await Session.commitTransaction();
 		return res.status(201).json({
 			message: "Subscription purchased successfully",
 			subscription: newSubscription,
 		});
 	} catch (error) {
-		await Session.abortTransaction();
-		next(error);
-	} finally {
-		await Session.endSession();
-	}
+		// 	await Session.abortTransaction();
+		next(error);}
+	// } finally {
+// 	await Session.endSession()
+	// }
 };
 
 // export const cancelSubscription = async (req:Request, res:Response,next:NextFunction) => {}
