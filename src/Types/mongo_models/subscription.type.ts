@@ -1,26 +1,25 @@
 export type SubscriptionType = {
     userId: string;
     subscriptionType: "Free" | "Basic" | "Pro";
-    lastSubscribedAt: Date;
     subscriptionStatus: "Active" | "Expired" | "Cancelled" | "Suspended";
     subscriptionEndDate: Date;
+    subscriptionAmount: number;
     subscriptionDurationMonths: number;
-    paymentMethod?: "creditCard" | "payPal" | "bankTransfer" | "upiId" | "upiApp" | "paytm";
-    lastTransactionId: string | null;
     autoRenew: boolean;
+    lastSubscribedAt: Date;
+    lastTransactionId: string | null;
+    paymentMethod: "card" | "netbanking" | "wallet" | "upi" | null;
+    paymentStatus: "Completed" | "Failed" | "Pending";
+    transactionId: string;
     transactionHistory: {
         transactionId: string;
         paymentId: string;
         amount: number;
         date: Date;
-        paymentMethod: "creditCard" | "payPal" | "bankTransfer" | "upiId" | "upiApp" | "paytm";
-        status: "Completed" | "Failed" | "Pending";
+        paymentMethod: "card" | "netbanking" | "wallet" | "upi";
+        paymentStatus: "Completed" | "Failed" | "Pending";
     }[];
     createdAt: Date;
     updatedAt: Date;
-    isSubscriptionActive: {
-        isActive: boolean;
-        endDate: Date;
-    };
     comparePlans(targetPlan:"Free" | "Basic" | "Pro"): boolean;
 }

@@ -8,10 +8,16 @@ const subscriptionSchema = new mongoose.Schema(
 			ref: "User",
 			required: true,
 		},
+
 		subscriptionType: {
 			type: String,
 			enum: ["Free", "Basic", "Pro"],
-			default: "Free",
+			required: true,
+		},
+		subscriptionAmount: {
+			type:Number,
+			default: 0,
+			required: true,
 		},
 		lastSubscribedAt: {
 			type: Date,
@@ -29,16 +35,14 @@ const subscriptionSchema = new mongoose.Schema(
 			type: Number,
 			default: 1,
 		},
+		paymentStatus: {
+			type: String,
+			enum: ["Completed", "Failed", "Pending"],
+			default: "Pending",
+		},
 		paymentMethod: {
 			type: String,
-			enum: [
-				"creditCard",
-				"payPal",
-				"bankTransfer",
-				"upiId",
-				"upiApp",
-				"paytm",
-			],
+			enum: ["card", "netbanking", "wallet", "upi"],
 			required: false,
 		},
 		lastTransactionId: {
@@ -49,6 +53,11 @@ const subscriptionSchema = new mongoose.Schema(
 			type: Boolean,
 			default: false,
 		},
+		transactionId: {
+			type: String,
+			required: true,
+			unique: true,
+		},
 		transactionHistory: {
 			type: [
 				{
@@ -58,16 +67,9 @@ const subscriptionSchema = new mongoose.Schema(
 					date: { type: Date, required: true },
 					paymentMethod: {
 						type: String,
-						enum: [
-							"creditCard",
-							"payPal",
-							"bankTransfer",
-							"upiId",
-							"upiApp",
-							"paytm",
-						],
+						enum: ["card", "netbanking", "wallet", "upi"],
 					},
-					status: { type: String, enum: ["Completed", "Failed", "Pending"] },
+					paymentStatus: { type: String, enum: ["Completed", "Failed", "Pending"] },
 				},
 			],
 			default: [],
@@ -91,21 +93,14 @@ subscriptionSchema.index({ userId: 1 });
 subscriptionSchema.index({ subscriptionStatus: 1, subscriptionEndDate: 1 });
 subscriptionSchema.index({ "transactionHistory.transactionId": 1 });
 
-subscriptionSchema.virtual("isSubscriptionActive").get(function () {
-	return {
-		isActive:
-			this.subscriptionStatus === "Active" && this.subscriptionEndDate
-				? new Date() < this.subscriptionEndDate
-				: false,
-		endDate: this.subscriptionEndDate,
-	};
-});
 
+// In subscription.model.ts - comparePlans method
 subscriptionSchema.methods.comparePlans = function (
 	targetPlan: "Free" | "Basic" | "Pro",
 ): boolean {
 	const planLevel: { [key: string]: number } = { Free: 1, Basic: 2, Pro: 3 };
-	const currentLevel = planLevel[this.subscriptionType];
+	const currentPlanName = this.subscriptionType; // ✅ Fixed
+	const currentLevel = planLevel[currentPlanName];
 	const targetLevel = planLevel[targetPlan];
 	if (currentLevel === undefined || targetLevel === undefined) {
 		return false;
