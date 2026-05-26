@@ -518,7 +518,7 @@ export async function updateDetailsController(
 			req.cookies.acToken,
 			config.ACCESS_TOKEN_JWT_SECRET,
 		) as JwtPayload;
-		const user = await userModel.findOne({ _id: decodedToken.userId });
+		const user = await userModel.findById(decodedToken.id).select("+passwordHash");
 		if (!user) {
 			return res.status(404).json({ message: "User Not Found!" });
 		}

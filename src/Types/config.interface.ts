@@ -17,4 +17,6 @@ export interface Config {
 	API_BASE_URL: string;
 	ALLOWED_ORIGINS: string[];
 	CLOUDINARY_URL: string;
+	RAZORPAY_KEY_ID: string;
+	RAZORPAY_KEY_SECRET: string;
 }

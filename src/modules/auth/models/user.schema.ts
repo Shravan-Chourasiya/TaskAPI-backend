@@ -13,12 +13,11 @@ export const userSchema = new mongoose.Schema(
 			required: [true, "Username is required"],
 			unique: true,
 			trim: true,
-			lowercase: true,
 			minlength: [3, "Username must be at least 3 characters"],
 			maxlength: [40, "Username cannot exceed 40 characters"],
 			match: [
 				/^[a-z0-9_-]+$/,
-				"Username can only contain lowercase letters, numbers, hyphens, and underscores",
+				"Username can only contain lowercase, uppercase letters, numbers, hyphens, and underscores",
 			],
 		},
 
