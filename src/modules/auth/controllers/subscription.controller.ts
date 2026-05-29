@@ -27,63 +27,94 @@ const freePlanBuyController = async (
 			) as JwtPayload
 		).id;
 
-		const userSubData = await SubscriptionModel.findOne({ userId });
+		const userSubData = await SubscriptionModel.findById(userId);
+		
+		if (userSubData) {
+			// Check if user already has an active subscription
+			const isActiveSubscription =
+				userSubData.subscriptionStatus === "Active" &&
+				new Date() < userSubData.subscriptionEndDate;
 
-		if (!userSubData) {
-			return res.status(404).json({ message: "No existing user found" });
-		}
+			if (isActiveSubscription) {
+				return res.status(400).json({
+					message:
+						userSubData.subscriptionType === "Free"
+							? "You already have an active Free subscription"
+							: "You already have an active paid subscription. Cannot downgrade to Free while active.",
+				});
+			}
 
-		// Check if user already has an active subscription
-		const isActiveSubscription =
-			userSubData.subscriptionStatus === "Active" &&
-			new Date() < userSubData.subscriptionEndDate;
-
-		if (isActiveSubscription) {
-			return res.status(400).json({
-				message:
-					userSubData.subscriptionType === "Free"
-						? "You already have an active Free subscription"
-						: "You already have an active paid subscription. Cannot downgrade to Free while active.",
+			// Update existing subscription record instead of creating new one
+			const transactionId = "txn_" + crypto.randomBytes(9).toString("hex");
+			const endDate = new Date();
+			endDate.setMonth(endDate.getMonth() + 12);
+			console.warn(
+				"###3::::: Updating subscription for Free plan with transactionId:",
+				transactionId,
+			);
+			await userSubData.updateOne({
+				$set: {
+					subscriptionType: subscriptionPlanDetails.planName,
+					subscriptionStatus: "Active",
+					subscriptionEndDate: endDate,
+					subscriptionAmount: 0,
+					subscriptionDurationMonths: subscriptionPlanDetails.duration,
+					autoRenew: false,
+					lastSubscribedAt: new Date(),
+					lastTransactionId: transactionId,
+					paymentMethod: "free",
+					paymentStatus: "Completed",
+					transactionId,
+				},
+				$push: {
+					transactionHistory: {
+						transactionId,
+						paymentId: `free_plan_1_year_${userId}`,
+						amount: 0,
+						date: new Date(),
+						paymentMethod: "free",
+						paymentStatus: "Completed",
+					},
+				},
 			});
-		}
+			console.warn(
+				"###4::::: Subscription updated for Free plan with transactionId:",
+				transactionId,
+			);
+			const updatedSubscription = await SubscriptionModel.findOne({ userId });
 
-		// Update existing subscription record instead of creating new one
-		const transactionId = "txn_" + crypto.randomBytes(9).toString("hex");
-		const endDate = new Date();
-		endDate.setMonth(endDate.getMonth() + 12);
-
-		await userSubData.updateOne({
-			$set: {
+			return res.status(200).json({
+				message: "Free subscription activated successfully",
+				subscription: updatedSubscription,
+			});
+		} else {
+			// Create new subscription record if none exists
+			const transactionId = "txn_" + crypto.randomBytes(9).toString("hex");
+			const subscriptionData = {
+				userId,
 				subscriptionType: subscriptionPlanDetails.planName,
-				subscriptionStatus: "Active",
-				subscriptionEndDate: endDate,
 				subscriptionAmount: 0,
+				subscriptionStatus: "Active",
 				subscriptionDurationMonths: subscriptionPlanDetails.duration,
 				autoRenew: false,
 				lastSubscribedAt: new Date(),
-				lastTransactionId: transactionId,
-				paymentMethod: "free",
+				paymentMethod: null,
 				paymentStatus: "Completed",
 				transactionId,
-			},
-			$push: {
-				transactionHistory: {
-					transactionId,
-					paymentId: `free_plan_1_year_${userId}`,
-					amount: 0,
-					date: new Date(),
-					paymentMethod: "free",
-					paymentStatus: "Completed",
-				},
-			},
-		});
-
-		const updatedSubscription = await SubscriptionModel.findOne({ userId });
-
-		return res.status(200).json({
-			message: "Free subscription activated successfully",
-			subscription: updatedSubscription,
-		});
+			};
+			const newSubscription = new SubscriptionModel(subscriptionData);
+			await newSubscription.save();
+			if (!newSubscription) {
+				return res
+					.status(500)
+					.json({ success: false, message: "Failed to create subscription" });
+			}
+			return res.status(201).json({
+				success: true,
+				message: "Free subscription activated successfully",
+				subscription: newSubscription,
+			});
+		}
 	} catch (error) {
 		next(error);
 	}
@@ -104,11 +135,11 @@ export const buySubscriptionController = async (
 			config.ACCESS_TOKEN_JWT_SECRET,
 		) as JwtPayload;
 		const userId = decoded.id;
-		const userData = await userModel.findOne({ _id: userId });
+
+		const userData = await userModel.findById(userId);
 		if (!userData) {
 			return res.status(404).json({ message: "User not found" });
 		}
-
 		const isPlanFree = subscriptionPlanDetails.planName === "Free";
 
 		if (isPlanFree) {
@@ -122,7 +153,10 @@ export const buySubscriptionController = async (
 		const planNameFromDb = existingSubscription?.subscriptionType;
 
 		// Check if user is trying to buy the same plan they already have
-		if (planNameFromDb === subscriptionPlanDetails.planName) {
+		if (
+			planNameFromDb === subscriptionPlanDetails.planName &&
+			existingSubscription?.subscriptionStatus === "Active"
+		) {
 			return res.status(400).json({
 				success: false,
 				message: "You already have this subscription plan",
@@ -169,18 +203,18 @@ export const buySubscriptionController = async (
 		}
 
 		const transactionId = "txn_" + crypto.randomBytes(9).toString("hex");
-
 		const razorpayOrder = await createRazorpayOrder(
 			subscriptionPlanDetails.price,
 			"INR",
 			`receipt_${transactionId}`,
 		);
+		console.warn(razorpayOrder);
 		if (!razorpayOrder) {
 			return res
 				.status(500)
 				.json({ message: "Failed to create Razorpay order" });
 		}
-		if (existingSubscription) {
+		if (existingSubscription && razorpayOrder) {
 			const updatedSubscriptionData = await existingSubscription.updateOne({
 				$set: {
 					subscriptionType: subscriptionPlanDetails.planName,
@@ -194,10 +228,10 @@ export const buySubscriptionController = async (
 				$push: {
 					transactionHistory: {
 						transactionId,
-						paymentId: razorpayOrder.id,
 						amount: subscriptionPlanDetails.price,
 						date: new Date(),
 						paymentStatus: "Pending",
+						razorPayID: razorpayOrder.id,
 					},
 				},
 			});
@@ -225,7 +259,7 @@ export const buySubscriptionController = async (
 				transactionHistory: [
 					{
 						transactionId,
-						paymentId: razorpayOrder.id,
+						razorPayID: razorpayOrder.id,
 						date: new Date(),
 						amount: subscriptionPlanDetails.price,
 						paymentStatus: "Pending",
@@ -270,29 +304,50 @@ export const verifySubscriptionPayment = async (
 	next: NextFunction,
 ) => {
 	try {
-		const { orderId, paymentId, signature, razorPayData } = req.body;
+		const { transactionId, razorPayID, signature, razorPayData } = req.body;
+		console.warn("###1:::::", razorPayData);
+		if (!transactionId || !razorPayID || !signature || !razorPayData) {
+			return res
+				.status(400)
+				.json({ message: "Missing required payment verification fields" });
+		}
+		const transactionIdTrimmed =
+			razorPayData.transactionId.split("receipt_")[1]; // Extract the original transactionId without any suffix
 
+		console.warn(
+			"###2::::: Extracted transactionId for verification:",
+			transactionIdTrimmed,
+		);
 		// Verify signature
-		const isValid = verifyRazorpaySignature(orderId, paymentId, signature);
-
+		const isValid = verifyRazorpaySignature(
+			transactionId,
+			razorPayID,
+			signature,
+		);
 		if (!isValid) {
 			return res.status(400).json({ message: "Invalid payment signature" });
 		}
 
 		// Update subscription to Active
 		const subscription = await SubscriptionModel.findOne({
-			transactionId: orderId,
+			transactionId: transactionIdTrimmed,
 		});
-
+		console.warn(
+			"###3::::: Subscription found for transactionId:",
+			subscription,
+		);
 		if (!subscription) {
 			return res.status(404).json({ message: "Subscription not found" });
 		}
 
 		// Find the specific transaction instead of assuming index 0
 		const transaction = subscription.transactionHistory.find(
-			(t) => t.transactionId === orderId,
+			(t) => t.transactionId === transactionIdTrimmed,
 		);
-
+		console.warn(
+			"###4::::: Transaction found in subscription history:",
+			transaction,
+		);
 		if (!transaction) {
 			return res
 				.status(404)
@@ -306,19 +361,21 @@ export const verifySubscriptionPayment = async (
 
 		subscription.subscriptionStatus = "Active";
 		subscription.lastSubscribedAt = new Date();
-		subscription.lastTransactionId = orderId;
 		subscription.subscriptionEndDate = endDate;
 		subscription.paymentStatus = "Completed";
-		subscription.paymentMethod = razorPayData.paymentMethod;
-
-		transaction.paymentId = paymentId;
+		subscription.paymentMethod = "upi";
+		console.warn("###5::::: Updating subscription with payment details");
+		transaction.razorPayID = razorPayID;
 		transaction.date = new Date();
 		transaction.paymentStatus = "Completed";
-		transaction.paymentMethod = razorPayData.paymentMethod;
-
+		transaction.paymentMethod = "upi";
+		console.warn("###6::::: Saving updated subscription");
 		await subscription.save();
-
-		return res.json({ message: "Payment verified successfully" });
+		console.warn("###7::::: Subscription updated and saved successfully");
+		return res.json({
+			success: true,
+			message: "Payment verified successfully",
+		});
 	} catch (error) {
 		next(error);
 	}

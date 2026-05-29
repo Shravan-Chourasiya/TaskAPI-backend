@@ -25,8 +25,8 @@ const subscriptionSchema = new mongoose.Schema(
 		},
 		subscriptionStatus: {
 			type: String,
-			enum: ["Active", "Expired", "Cancelled", "Suspended"],
-			default: "Active",
+			enum: ["Active", "Expired", "Cancelled", "Suspended","Pending"],
+			default: "Pending",
 		},
 		subscriptionEndDate: {
 			type: Date,
@@ -45,10 +45,6 @@ const subscriptionSchema = new mongoose.Schema(
 			enum: ["card", "netbanking", "wallet", "upi"],
 			required: false,
 		},
-		lastTransactionId: {
-			type: String,
-			default: null,
-		},
 		autoRenew: {
 			type: Boolean,
 			default: false,
@@ -62,7 +58,7 @@ const subscriptionSchema = new mongoose.Schema(
 			type: [
 				{
 					transactionId: { type: String, required: true },
-					paymentId: { type: String, required: true },
+					razorPayID: { type: String, required: true },
 					amount: { type: Number, required: true },
 					date: { type: Date, required: true },
 					paymentMethod: {

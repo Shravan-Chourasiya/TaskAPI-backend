@@ -9,15 +9,16 @@ export const razorpayInstance = new Razorpay({
 });
 
 export async function createRazorpayOrder(
-	amount: number,
+	amountRs: number,
 	currency: string = "INR",
-    receipt: string
+	receipt: string,
 ) {
-	return await razorpayInstance.orders.create({
-		amount: amount * 100, // Convert to paise
+	const options = {
+		amount: amountRs * 100, // Convert to paise
 		currency,
 		receipt,
-	});
+	};
+	return await razorpayInstance.orders.create(options);
 }
 
 export function verifyRazorpaySignature(
