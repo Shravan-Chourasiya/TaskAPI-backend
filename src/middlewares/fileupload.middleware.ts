@@ -34,7 +34,7 @@ export const fileUploadMiddleware = async (
 				throw fileError;
 			}
 		}
-		const { firstName, lastName, bio, avatarUrl, country, city, email } =
+		const { firstName, lastName, bio, avatarUrl, country, city } =
 			req.body;
 
 		req.body = {
@@ -44,8 +44,7 @@ export const fileUploadMiddleware = async (
 				bio,
 				avatarUrl: avatarUrl || "",
 				country,
-				city,
-				email
+				city
 			},
 		};
 

@@ -624,15 +624,6 @@ export async function updateProfile(
 		if (!user) {
 			return res.status(404).json({ message: "User Not Found!" });
 		}
-		// const isPasswordCorrect = await user.comparePassword(password);
-		// if (!isPasswordCorrect) {
-		// 	return res.status(403).json({ message: "Invalid Password.Try Again!" });
-		// }
-		console.warn("Received profile update request with data:", {
-			newValue,
-			fileUrl,
-		});
-		// Merge new profile data with existing, add avatar URL if uploaded
 		const profileUpdationDetails = {
 			...user.profile,
 			...newValue,

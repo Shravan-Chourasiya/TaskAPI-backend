@@ -11,7 +11,7 @@ const contants = {
 export const SUBSCRIPTION_PLANS = {
 	Free: { price: 0 },
 	Basic: { price: 5 },
-	Pro: { price: 10 },
+	Pro: { price: 15 },
 };
 
 export const getPlanPrice = (
