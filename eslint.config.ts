@@ -1,7 +1,8 @@
 import js from "@eslint/js";
 import tseslint from "typescript-eslint";
+import type { Linter } from "eslint";
 
-export default [
+const config: Linter.Config[] = [
 	{
 		ignores: ["node_modules", "dist", "build", "*.config.js"],
 	},
@@ -38,7 +39,7 @@ export default [
 			"@typescript-eslint/no-misused-promises": "error",
 
 			// General
-			"no-console": ["warn", { allow: ["warn", "error"] }],
+			"no-console": ["warn", { allow: ["warn", "error","info","log"] }],
 			"no-debugger": "error",
 			"prefer-const": "error",
 			"no-var": "error",
@@ -67,3 +68,5 @@ export default [
 		},
 	},
 ];
+
+export default config;
