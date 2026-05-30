@@ -1,7 +1,7 @@
 import jwt, { type JwtPayload } from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { config } from "../../../configs/app.config.js";
-import { generateOTP, getOtpHTML } from "../../../utils/email.utils.js";
+import { generateOTP, getOtpHTML } from "../../../utils/nodemailer.utils.js";
 import { sendVerificationEmail } from "../../../services/nodemailer.service.js";
 import type { NextFunction, Request, Response } from "express";
 import { emailPurposeMapper } from "../utils/authcontroller.utils.js";

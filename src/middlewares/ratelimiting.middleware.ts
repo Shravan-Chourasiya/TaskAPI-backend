@@ -36,6 +36,7 @@ import type { Request, Response } from "express";
 import { redisClient } from "../configs/redis.init.js";
 import crypto from "crypto";
 import constants from "../constants.js";
+import { REDIS_PREFIXES } from "../constants.js";
 
 type RequestWithUser = Request & {
 	userID?: string;
@@ -72,7 +73,7 @@ export const apiRateLimiter = rateLimit({
 	legacyHeaders: false,
 	store: new RedisStore({
 		sendCommand,
-		prefix: "rl:api:",
+		prefix: REDIS_PREFIXES.RATE_LIMIT_API,
 	}),
 	keyGenerator: (req: RequestWithUser) => {
 		const userID = req.userID;
@@ -91,7 +92,7 @@ export const authRateLimiter = rateLimit({
 	legacyHeaders: false,
 	store: new RedisStore({
 		sendCommand,
-		prefix: "rl:auth:",
+		prefix: REDIS_PREFIXES.RATE_LIMIT_AUTH,
 	}),
 	keyGenerator: (req) => {
 		const email = req.body.email?.toLowerCase();
@@ -110,7 +111,7 @@ export const otpGenerationLimiter = rateLimit({
 	legacyHeaders: false,
 	store: new RedisStore({
 		sendCommand,
-		prefix: "rl:otp:gen:",
+		prefix: REDIS_PREFIXES.RATE_LIMIT_OTP_GEN,
 	}),
 	keyGenerator: (req) => {
 		const email = req.body.email?.toLowerCase();
@@ -129,7 +130,7 @@ export const otpVerificationLimiter = rateLimit({
 	legacyHeaders: false,
 	store: new RedisStore({
 		sendCommand,
-		prefix: "rl:otp:verify:",
+		prefix: REDIS_PREFIXES.RATE_LIMIT_OTP_VERIFY,
 	}),
 	keyGenerator: (req) => {
 		const email = req.body.email?.toLowerCase();
@@ -147,7 +148,7 @@ export const profileUpdateLimiter = rateLimit({
 	legacyHeaders: false,
 	store: new RedisStore({
 		sendCommand,
-		prefix: "rl:profile:update:",
+		prefix: REDIS_PREFIXES.RATE_LIMIT_UPDATE,
 	}),
 	keyGenerator: (req) => {
 		const email = req.body.email?.toLowerCase();

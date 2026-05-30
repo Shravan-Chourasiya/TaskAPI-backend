@@ -3,6 +3,7 @@ import type {
 	SessionType,
 	SessionStaticMethods,
 } from "../../../types/mongo_models/session.type.js";
+import { AUTH_CONSTANTS } from "../../../constants.js";
 
 export const sessionSchema = new mongoose.Schema(
 	{
@@ -22,13 +23,13 @@ export const sessionSchema = new mongoose.Schema(
 		activeSessionCount:{
 			type:Number,
 			default:0,
-			max:[5,"Cannot have more than 5 concurrent devices"]
+			max:[AUTH_CONSTANTS.MAX_ACTIVE_SESSIONS,"Cannot have more than 5 concurrent devices"]
 		},
 
 		sessionDevices: {
 			type: [String],
 			default: [],
-			max: [5, "Cannot have more than 5 concurrent devices"],
+			max: [AUTH_CONSTANTS.MAX_ACTIVE_SESSIONS, "Cannot have more than 5 concurrent devices"],
 		},
 
 		userAgent: {

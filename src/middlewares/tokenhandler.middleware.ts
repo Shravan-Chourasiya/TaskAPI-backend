@@ -4,6 +4,7 @@ import jwt, { type JwtPayload } from "jsonwebtoken";
 import { config } from "../configs/app.config.js";
 import bcrypt from "bcryptjs";
 import { asyncErrorHandler } from "../utils/asynchandler.utils.js";
+import { tokenMiddlewareResponse } from "../utils/apiResponse.utils.js";
 
 type RequestWithUser = Request & {
 	userID?: string;
@@ -18,23 +19,13 @@ export const accessTokenHandler = asyncErrorHandler(
 	async (req: RequestWithUser, res: Response, next: NextFunction) => {
 		const accessToken = req.cookies.acToken;
 		if (!accessToken) {
-			return res.status(401).json({
-				tokenExpired:true,
-				success: false,
-				error: "Unauthorized",
-				message: "Access token not found",
-			});
+			return res.status(401).json(tokenMiddlewareResponse(false,"Access token not found","Unauthorized",true,));
 		}
 
 		// Verify JWT signature and expiry (throws error if invalid)
 		const decoded = jwt.verify(accessToken, config.ACCESS_TOKEN_JWT_SECRET) as JwtPayload;
 		if (!decoded) {
-			return res.status(401).json({
-				tokenExpired: true,
-				success: false,
-				error: "InvalidToken",
-				message: "Invalid access token",
-			});
+			return res.status(401).json(tokenMiddlewareResponse(false,"Invalid access token","InvalidToken",true,));
 		}
 
 		req.userID = decoded.id;
@@ -51,12 +42,7 @@ export const refreshTokenHandler = asyncErrorHandler(
 	async (req: RequestWithUser, res: Response, next: NextFunction) => {
 		const refreshToken = req.cookies.rfToken;
 		if (!refreshToken) {
-			return res.status(401).json({
-				tokenExpired: true,
-				success: false,
-				error: "Unauthorized",
-				message: "Refresh token not found",
-			});
+			return res.status(401).json(tokenMiddlewareResponse(false,"Refresh token not found","Unauthorized",true,));
 		}
 
 		// 1. Verify JWT signature and expiry
@@ -72,12 +58,7 @@ export const refreshTokenHandler = asyncErrorHandler(
 			.select("+refreshTokenHash"); // Include select: false field
 
 		if (!session) {
-			return res.status(401).json({
-				tokenExpired: true,
-				success: false,
-				error: "SessionNotFound",
-				message: "Session not found or revoked",
-			});
+			return res.status(401).json(tokenMiddlewareResponse(false,"Session not found or revoked","SessionNotFound",true,));
 		}
 
 		// 3. Verify refresh token hash
@@ -87,12 +68,7 @@ export const refreshTokenHandler = asyncErrorHandler(
 		);
 
 		if (!isTokenValid) {
-			return res.status(401).json({
-				tokenExpired: true,
-				success: false,
-				error: "InvalidToken",
-				message: "Invalid refresh token",
-			});
+			return res.status(401).json(tokenMiddlewareResponse(false,"Invalid refresh token","InvalidToken",true,));
 		}
 
 		// 4. Check token family (theft detection)
@@ -108,24 +84,14 @@ export const refreshTokenHandler = asyncErrorHandler(
 				"Token theft detected",
 			);
 
-			return res.status(401).json({
-				tokenExpired: true,
-				success: false,
-				error: "TokenTheftDetected",
-				message: "Security alert: All sessions revoked. Please login again.",
-			});
+			return res.status(401).json(tokenMiddlewareResponse(false,"Security alert: All sessions revoked. Please login again.","TokenTheftDetected",true,));
 		}
 
 		// 5. Check session expiry
 		if (session.refreshTokenExpiresAt < new Date()) {
 			await session.revoke("Token expired");
 
-			return res.status(401).json({
-				tokenExpired: true,
-				success: false,
-				error: "TokenExpired",
-				message: "Refresh token expired",
-			});
+			return res.status(401).json(tokenMiddlewareResponse(false,"Refresh token expired","TokenExpired",true,));
 		}
 
 		// 6. Update last activity
@@ -148,12 +114,7 @@ export const strictAuthHandler = asyncErrorHandler(
 		const accessToken = req.cookies.acToken;
 
 		if (!accessToken) {
-			return res.status(401).json({
-				tokenExpired: true,
-				success: false,
-				error: "Unauthorized",
-				message: "Access token required",
-			});
+			return res.status(401).json(tokenMiddlewareResponse(false,"Access token required","Unauthorized",true,));
 		}
 
 		const decoded = jwt.verify(accessToken, config.ACCESS_TOKEN_JWT_SECRET) as JwtPayload;
@@ -166,12 +127,7 @@ export const strictAuthHandler = asyncErrorHandler(
 		});
 
 		if (!session) {
-			return res.status(401).json({
-				tokenExpired: true,
-				success: false,
-				error: "SessionInvalid",
-				message: "Session expired or revoked",
-			});
+			return res.status(401).json(tokenMiddlewareResponse(false,"Session expired or revoked","SessionInvalid",true,));
 		}
 
 		req.userID = decoded.id;

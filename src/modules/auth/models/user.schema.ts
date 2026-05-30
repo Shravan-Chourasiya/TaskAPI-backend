@@ -5,6 +5,7 @@ import type {
 } from "../../../types/mongo_models/user.type.js";
 import * as crypto from "crypto";
 import * as bcrypt from "bcryptjs";
+import { AUTH_CONSTANTS, USER_LIMITS } from "../../../constants.js";
 
 export const userSchema = new mongoose.Schema(
 	{
@@ -13,8 +14,8 @@ export const userSchema = new mongoose.Schema(
 			required: [true, "Username is required"],
 			unique: true,
 			trim: true,
-			minlength: [3, "Username must be at least 3 characters"],
-			maxlength: [40, "Username cannot exceed 40 characters"],
+			minlength: [USER_LIMITS.USERNAME_MIN_LENGTH, "Username must be at least 3 characters"],
+			maxlength: [USER_LIMITS.USERNAME_MAX_LENGTH, "Username cannot exceed 40 characters"],
 			match: [
 				/^[a-z0-9_-]+$/,
 				"Username can only contain lowercase, uppercase letters, numbers, hyphens, and underscores",
@@ -34,7 +35,7 @@ export const userSchema = new mongoose.Schema(
 		passwordHash: {
 			type: String,
 			required: [true, "Password is required"],
-			minlength: [8, "Password must be at least 8 characters"],
+			minlength: [USER_LIMITS.PASSWORD_MIN_LENGTH, "Password must be at least 8 characters"],
 			select: false,
 		},
 
@@ -63,7 +64,7 @@ export const userSchema = new mongoose.Schema(
 		failedLoginAttempts: {
 			type: Number,
 			default: 0,
-			max: [10, "Too many failed login attempts"],
+			max: [AUTH_CONSTANTS.FAILED_LOGIN_THRESHOLD_TEMP_LOCK, "Too many failed login attempts"],
 		},
 
 		accountLockedUntil: Date,
@@ -97,13 +98,13 @@ export const userSchema = new mongoose.Schema(
 		activeSessions: {
 			type: Number,
 			default: 0,
-			max: [5, "Cannot have more than 5 concurrent devices"],
+			max: [AUTH_CONSTANTS.MAX_ACTIVE_SESSIONS, "Cannot have more than 5 concurrent devices"],
 		},
 		
 		sessionDevices: {
 			type: [String],
 			default: [],
-			max: [5, "Cannot have more than 5 concurrent devices"],
+			max: [AUTH_CONSTANTS.MAX_ACTIVE_SESSIONS, "Cannot have more than 5 concurrent devices"],
 		},
 
 		lastActiveAt: {
@@ -114,17 +115,17 @@ export const userSchema = new mongoose.Schema(
 			firstName: {
 				type: String,
 				trim: true,
-				maxlength: [50, "First name cannot exceed 50 characters"],
+				maxlength: [USER_LIMITS.NAME_MAX_LENGTH, "First name cannot exceed 50 characters"],
 			},
 			lastName: {
 				type: String,
 				trim: true,
-				maxlength: [50, "Last name cannot exceed 50 characters"],
+				maxlength: [USER_LIMITS.NAME_MAX_LENGTH, "Last name cannot exceed 50 characters"],
 			},
 			avatarUrl: String,
 			bio: {
 				type: String,
-				maxlength: [500, "Bio cannot exceed 500 characters"],
+				maxlength: [USER_LIMITS.BIO_MAX_LENGTH, "Bio cannot exceed 500 characters"],
 			},
 			country: {
 				type: String,
@@ -180,8 +181,30 @@ export const userSchema = new mongoose.Schema(
 		twoFA_Options: {
 			type: [String],
 			enum: ["email", "sms", "authenticator"],
-			default: ["email"],
+			default: [],
 			select: false,
+		},
+
+		twoFA_email: {
+			type: String,
+			match: [/^\S+@\S+\.\S+$/, "Invalid email format"],
+			default: "",
+		},
+
+		twoFA_emailVerified: {
+			type: Boolean,
+			default: false,
+		},
+
+		recoveryEmail: {
+			type: String,
+			match: [/^\S+@\S+\.\S+$/, "Invalid email format"],
+			default: "",
+		},
+
+		recoveryEmailVerified: {
+			type: Boolean,
+			default: false,
 		},
 
 		isBlackListed: {
@@ -249,7 +272,7 @@ userSchema.pre("save", async function () {
 		return;
 	}
 
-	this.passwordHash = await bcrypt.hash(this.passwordHash, 12);
+	this.passwordHash = await bcrypt.hash(this.passwordHash, AUTH_CONSTANTS.BCRYPT_SALT_ROUNDS);
 	this.lastPasswordChangedAt = new Date();
 });
 
@@ -269,7 +292,7 @@ userSchema.pre("save", function () {
 		!this.scheduledDeletionAt
 	) {
 		this.deletedAt = new Date();
-		this.scheduledDeletionAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+		this.scheduledDeletionAt = new Date(Date.now() + AUTH_CONSTANTS.SOFT_DELETE_GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1000);
 		this.status = "deleted";
 	}
 });
@@ -299,19 +322,19 @@ userSchema.methods.incrementFailedLogin = async function (): Promise<void> {
 	this.lastFailedLoginAt = new Date();
 
 	// Lock account after 5 failed attempts for 15 minutes
-	if (this.failedLoginAttempts >= 5) {
+	if (this.failedLoginAttempts >= AUTH_CONSTANTS.FAILED_LOGIN_THRESHOLD_LOCK) {
 		this.accountLockedUntil = new Date(Date.now() + 15 * 60 * 1000);
 	}
 
 	// Lock account for 1 hour after 10 attempts
-	if (this.failedLoginAttempts >= 10) {
+	if (this.failedLoginAttempts >= AUTH_CONSTANTS.FAILED_LOGIN_THRESHOLD_TEMP_LOCK) {
 		this.accountLockedUntil = new Date(Date.now() + 60 * 60 * 1000);
 	}
 
 	// Suspend account after 15 attempts
-	if (this.failedLoginAttempts >= 15) {
+	if (this.failedLoginAttempts >= AUTH_CONSTANTS.FAILED_LOGIN_THRESHOLD_PERM_LOCK) {
 		this.status = "suspended";
-		this.accountLockedUntil = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+		this.accountLockedUntil = new Date(Date.now() + 24 * 60 * 60 * 1000);
 	}
 
 	await this.save();
@@ -362,7 +385,7 @@ userSchema.methods.softDelete = async function (
 	this.isDeleted = true;
 	this.deletedAt = new Date();
 	this.status = "deleted";
-	this.scheduledDeletionAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+	this.scheduledDeletionAt = new Date(Date.now() + AUTH_CONSTANTS.SOFT_DELETE_GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1000);
 	if (deletedBy) {
 		this.deletedBy = deletedBy;
 	}

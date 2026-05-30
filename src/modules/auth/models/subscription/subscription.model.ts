@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import type { SubscriptionType } from "../../../../types/mongo_models/subscription.type.js";
+import { SUBSCRIPTION_CONSTANTS } from "../../../../constants.js";
 
 const subscriptionSchema = new mongoose.Schema(
 	{
@@ -80,7 +81,7 @@ subscriptionSchema.pre("save", function () {
 	if (this.isNew && !this.subscriptionEndDate) {
 		this.subscriptionEndDate = new Date(
 			this.lastSubscribedAt.getTime() +
-				this.subscriptionDurationMonths * 28 * 24 * 60 * 60 * 1000,
+				this.subscriptionDurationMonths * SUBSCRIPTION_CONSTANTS.DAYS_PER_MONTH * 24 * 60 * 60 * 1000,
 		);
 	}
 });

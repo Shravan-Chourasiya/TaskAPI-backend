@@ -10,7 +10,7 @@ import {
 	createRazorpayOrder,
 	verifyRazorpaySignature,
 } from "../../../services/razorpay.service.js";
-import { SUBSCRIPTION_PLANS } from "../../../constants.js";
+import { SUBSCRIPTION_PLANS, SUBSCRIPTION_CONSTANTS } from "../../../constants.js";
 
 const freePlanBuyController = async (
 	req: Request,
@@ -45,7 +45,7 @@ const freePlanBuyController = async (
 			}
 
 			// Update existing subscription record instead of creating new one
-			const transactionId = "txn_" + crypto.randomBytes(9).toString("hex");
+			const transactionId = SUBSCRIPTION_CONSTANTS.TRANSACTION_ID_PREFIX + "_" + crypto.randomBytes(SUBSCRIPTION_CONSTANTS.TRANSACTION_ID_BYTES).toString("hex");
 			const endDate = new Date();
 			endDate.setMonth(endDate.getMonth() + 12);
 			console.warn(
@@ -89,7 +89,7 @@ const freePlanBuyController = async (
 			});
 		} else {
 			// Create new subscription record if none exists
-			const transactionId = "txn_" + crypto.randomBytes(9).toString("hex");
+			const transactionId = SUBSCRIPTION_CONSTANTS.TRANSACTION_ID_PREFIX + "_" + crypto.randomBytes(SUBSCRIPTION_CONSTANTS.TRANSACTION_ID_BYTES).toString("hex");
 			const subscriptionData = {
 				userId,
 				subscriptionType: subscriptionPlanDetails.planName,
@@ -202,10 +202,10 @@ export const buySubscriptionController = async (
 			});
 		}
 
-		const transactionId = "txn_" + crypto.randomBytes(9).toString("hex");
+		const transactionId = SUBSCRIPTION_CONSTANTS.TRANSACTION_ID_PREFIX + "_" + crypto.randomBytes(SUBSCRIPTION_CONSTANTS.TRANSACTION_ID_BYTES).toString("hex");
 		const razorpayOrder = await createRazorpayOrder(
 			subscriptionPlanDetails.price,
-			"INR",
+			SUBSCRIPTION_CONSTANTS.CURRENCY,
 			`receipt_${transactionId}`,
 		);
 		console.warn(razorpayOrder);
@@ -356,7 +356,7 @@ export const verifySubscriptionPayment = async (
 
 		const endDate = new Date(
 			new Date().getTime() +
-				subscription.subscriptionDurationMonths * 28 * 24 * 60 * 60 * 1000,
+				subscription.subscriptionDurationMonths * SUBSCRIPTION_CONSTANTS.DAYS_PER_MONTH * 24 * 60 * 60 * 1000,
 		);
 
 		subscription.subscriptionStatus = "Active";
