@@ -2,6 +2,14 @@ import type { NextFunction, Request, Response } from "express";
 import { config } from "../configs/app.config.js";
 import jwt, { type JwtPayload } from "jsonwebtoken";
 import userModel from "../modules/auth/models/user.schema.js";
+import { contactUsSchema } from "../libs/zod/general.zodschema.js";
+import * as z from "zod";
+import {
+	sendContactUsEmail,
+	sendVerificationEmail,
+} from "../services/nodemailer.service.js";
+import { getContactUsHTML } from "../utils/nodemailer.utils.js";
+import { isUserResponse, standardResponse } from "../utils/apiResponse.utils.js";
 
 export const isUserController = async (
 	req: Request,
@@ -15,17 +23,14 @@ export const isUserController = async (
 			config.ACCESS_TOKEN_JWT_SECRET,
 		) as JwtPayload;
 		if (!decoded) {
-			return res.status(401).json({ isUser: false, message: "Invalid token" });
+			return res.status(401).json(isUserResponse(false, "Invalid token", false, null));
 		}
 		const user = await userModel.findById(decoded.id);
 		if (!user) {
-			return res.status(404).json({ isUser: false, message: "User not found" });
+			return res.status(404).json(isUserResponse(false, "User not found", false, null));
 		}
 		if (user.status !== "active") {
-			return res.status(403).json({
-				isUser: false,
-				message: "User is not verified or Account is Inactive/Suspended",
-			});
+				return res.status(403).json(isUserResponse(false, "User is not verified or Account is Inactive/Suspended", false, null));
 		}
 		if (user.isPhoneVerified) {
 			const userObj = {
@@ -38,7 +43,7 @@ export const isUserController = async (
 			};
 			return res
 				.status(200)
-				.json({success:true, isUser: true, message: "User is verified", user: userObj });
+				.json(isUserResponse(true, "User is verified", true, userObj));
 		} else {
 			const userObj = {
 				username: user.username,
@@ -49,7 +54,7 @@ export const isUserController = async (
 			};
 			return res
 				.status(200)
-				.json({ success:true,isUser: true, message: "User is verified", user: userObj });
+				.json(isUserResponse(true, "User is verified", true, userObj));
 		}
 	} catch (error) {
 		next(error);
@@ -63,6 +68,24 @@ export const healthCheckController = (
 ) => {
 	try {
 		res.status(200).json({ status: "OK", message: "Health check passed" });
+	} catch (error) {
+		next(error);
+	}
+};
+
+export const contactUsEmailController = async (
+	req: Request,
+	res: Response,
+	next: NextFunction,
+) => {
+	try {
+		const { name, email, message }: z.infer<typeof contactUsSchema> = req.body;
+
+		const html = getContactUsHTML(name, email, message);
+
+		await sendContactUsEmail(email, config.GMAIL_USER_EMAIL, name, html);
+
+		res.status(200).json(standardResponse(true, "Your message has been sent successfully"));
 	} catch (error) {
 		next(error);
 	}

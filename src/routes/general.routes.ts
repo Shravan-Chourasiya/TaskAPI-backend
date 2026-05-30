@@ -4,9 +4,10 @@ import * as generalRouter from "../controllers/generalUse.controller.js";
 
 const router = express.Router();
 
-router.get("/is-user",accessTokenHandler,generalRouter.isUserController);
+router.get("/is-user", accessTokenHandler, generalRouter.isUserController);
 
-router.get('/health',generalRouter.healthCheckController);
+router.get("/health", generalRouter.healthCheckController);
 
+router.post("/contact-us", generalRouter.contactUsEmailController);
 
 export { router as generalRouter };
