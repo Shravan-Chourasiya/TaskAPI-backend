@@ -15,25 +15,12 @@ export const standardResponse = (
 	};
 };
 
-export const tokenMiddlewareResponse = (
-	success: boolean,
-	message: string,
-	tokenExpired: boolean = true,
-): ApiResponse => {
-	return {
-		success,
-		message,
-		data: {
-			tokenExpired,
-		},
-	};
-};
 
 export const isUserResponse = (
-	isUser: boolean,
-	message: string,
-	user: object | null,
 	success: boolean,
+	message: string,
+	isUser: boolean,
+	user: object | null,
 ): ApiResponse => {
 	return {
 		success,
@@ -44,3 +31,19 @@ export const isUserResponse = (
 		},
 	};
 };
+
+	export const tokenMiddlewareResponse = (
+		success: boolean,
+		message: string,
+		error?: string,
+		requiresReAuth: boolean = true,
+	): ApiResponse => {
+		return {
+			success,
+			message,
+			data: {
+				error,
+				requiresReAuth,
+			},
+		};	
+	};

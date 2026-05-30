@@ -56,3 +56,48 @@ export async function sendVerificationEmail(
 		}
 	}
 }
+
+export async function sendContactUsEmail(
+	from: string,
+	to: string,
+	name: string,
+	html: string,
+) {
+	try {
+		const subject: string = `New Contact Us Message from user ${name}`;
+		const info = await transporter.sendMail({
+			from: from,
+			to: to,
+			subject: subject,
+			html: html,
+		});
+		if (info.response) {
+			return info.messageId;
+		}
+		throw new Error("Failed to send email - no response from server");
+	} catch (err) {
+		const error = err as NodemailerError;
+
+		switch (error.code) {
+			case "ECONNECTION":
+			case "ETIMEDOUT":
+				console.error("Network error - retry later:", error.message);
+				throw new Error("Network error - please try again later");
+				break;
+
+			case "EAUTH":
+				console.error("Authentication failed:", error.message);
+				throw new Error("Authentication failed - please check credentials");
+				break;
+
+			case "EENVELOPE":
+				console.error("Invalid recipients:", error.rejected);
+				throw new Error("Invalid recipient email address");
+				break;
+
+			default:
+				console.error("Send failed:", error.message, error);
+				throw new Error("Failed to send email - please try again");
+		}
+	}
+}
