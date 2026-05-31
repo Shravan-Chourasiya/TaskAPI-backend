@@ -1,7 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import * as z from "zod";
 import type { buySubscriptionSchema } from "../../../libs/zod/subscription.zodschema.js";
-import { SubscriptionModel } from "../models/subscription/subscription.model.js";
 import userModel from "../models/user.schema.js";
 import jwt, { type JwtPayload } from "jsonwebtoken";
 import { config } from "../../../configs/app.config.js";
@@ -11,6 +10,7 @@ import {
 	verifyRazorpaySignature,
 } from "../../../services/razorpay.service.js";
 import { SUBSCRIPTION_PLANS, SUBSCRIPTION_CONSTANTS } from "../../../constants.js";
+import { SubscriptionModel } from "../models/subscription.schema.js";
 
 const freePlanBuyController = async (
 	req: Request,
@@ -342,7 +342,7 @@ export const verifySubscriptionPayment = async (
 
 		// Find the specific transaction instead of assuming index 0
 		const transaction = subscription.transactionHistory.find(
-			(t) => t.transactionId === transactionIdTrimmed,
+			(t:any) => t.transactionId === transactionIdTrimmed,
 		);
 		console.warn(
 			"###4::::: Transaction found in subscription history:",

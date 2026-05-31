@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
-import type { SubscriptionType } from "../../../../types/mongo_models/subscription.type.js";
-import { SUBSCRIPTION_CONSTANTS } from "../../../../constants.js";
+import type { SubscriptionType } from "../../../types/mongo_models/subscription.type.js";
+import { SUBSCRIPTION_CONSTANTS } from "../../../constants.js";
 
 const subscriptionSchema = new mongoose.Schema(
 	{
@@ -91,7 +91,7 @@ subscriptionSchema.index({ subscriptionStatus: 1, subscriptionEndDate: 1 });
 subscriptionSchema.index({ "transactionHistory.transactionId": 1 });
 
 
-// In subscription.model.ts - comparePlans method
+// In subscription.schema.ts - comparePlans method
 subscriptionSchema.methods.comparePlans = function (
 	targetPlan: "Free" | "Basic" | "Pro",
 ): boolean {

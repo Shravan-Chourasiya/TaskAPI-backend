@@ -1,6 +1,6 @@
 import nodemailer from "nodemailer";
 import { config } from "../configs/app.config.js";
-import { NodemailerError } from "../types/errors.interface.js";
+import { handleNodemailerError } from "../utils/nodemailer.utils.js";
 
 const transporter = nodemailer.createTransport({
 	service: "gmail",
@@ -30,30 +30,8 @@ export async function sendVerificationEmail(
 			return info.messageId;
 		}
 		throw new Error("Failed to send email - no response from server");
-	} catch (err) {
-		const error = err as NodemailerError;
-
-		switch (error.code) {
-			case "ECONNECTION":
-			case "ETIMEDOUT":
-				console.error("Network error - retry later:", error.message);
-				throw new Error("Network error - please try again later");
-				break;
-
-			case "EAUTH":
-				console.error("Authentication failed:", error.message);
-				throw new Error("Authentication failed - please check credentials");
-				break;
-
-			case "EENVELOPE":
-				console.error("Invalid recipients:", error.rejected);
-				throw new Error("Invalid recipient email address");
-				break;
-
-			default:
-				console.error("Send failed:", error.message, error);
-				throw new Error("Failed to send email - please try again");
-		}
+	} catch (err: any) {
+		handleNodemailerError(err);
 	}
 }
 
@@ -75,29 +53,7 @@ export async function sendContactUsEmail(
 			return info.messageId;
 		}
 		throw new Error("Failed to send email - no response from server");
-	} catch (err) {
-		const error = err as NodemailerError;
-
-		switch (error.code) {
-			case "ECONNECTION":
-			case "ETIMEDOUT":
-				console.error("Network error - retry later:", error.message);
-				throw new Error("Network error - please try again later");
-				break;
-
-			case "EAUTH":
-				console.error("Authentication failed:", error.message);
-				throw new Error("Authentication failed - please check credentials");
-				break;
-
-			case "EENVELOPE":
-				console.error("Invalid recipients:", error.rejected);
-				throw new Error("Invalid recipient email address");
-				break;
-
-			default:
-				console.error("Send failed:", error.message, error);
-				throw new Error("Failed to send email - please try again");
-		}
+	} catch (err: any) {
+		handleNodemailerError(err);
 	}
 }

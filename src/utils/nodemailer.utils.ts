@@ -1,11 +1,41 @@
 import { config } from "../configs/app.config.js";
 import crypto from "crypto";
 import { AUTH_CONSTANTS } from "../constants.js";
+import { NodemailerError } from "../types/errors.interface.js";
 
 export function generateOTP() {
 	return crypto.randomInt(100000, 999999).toString();
 }
 
+export function handleNodemailerError(err: Error): string {
+	const error = err as NodemailerError;
+
+	switch (error.code) {
+		case "ECONNECTION":
+		case "ETIMEDOUT":
+			console.error("Network error - retry later:", error.message);
+			throw new Error("Network error - please try again later");
+			break;
+
+		case "EAUTH":
+			console.error("Authentication failed:", error.message);
+			throw new Error("Authentication failed - please check credentials");
+			break;
+
+		case "EENVELOPE":
+			console.error("Invalid recipients:", error.rejected);
+			throw new Error("Invalid recipient email address");
+			break;
+
+		default:
+			console.error("Send failed:", error.message, error);
+			throw new Error("Failed to send email - please try again");
+	}
+}
+
+// ─────────────────────────────────────────────
+// 1. OTP VERIFICATION
+// ─────────────────────────────────────────────
 export function getOtpHTML(otp: string, purpose: string) {
 	let purposeDescription, actionText, purposeAbb;
 	switch (purpose) {
@@ -125,6 +155,9 @@ export function getOtpHTML(otp: string, purpose: string) {
 `;
 }
 
+// ─────────────────────────────────────────────
+// 2. CONTACT US MESSAGES
+// ─────────────────────────────────────────────
 export const getContactUsHTML = (
 	name: string,
 	email: string,
@@ -237,443 +270,676 @@ export const getContactUsHTML = (
 </html>
 `;
 };
-// ─────────────────────────────────────────────
-// SHARED HELPERS
-// ─────────────────────────────────────────────
 
-const baseStyles = `
-  body { margin:0; padding:0; background-color:#f0f2f5; font-family:'Segoe UI',Helvetica,Arial,sans-serif; }
-`;
-
-function shell(
-	headerColor: string,
-	icon: string,
-	title: string,
-	subtitle: string,
-	body: string,
-): string {
-	return `<!DOCTYPE html>
+// ─────────────────────────────────────────────
+// 3. SESSIONS REVOKED
+// reason: e.g. "suspicious activity detected", "password changed", "admin action"
+// ─────────────────────────────────────────────
+export function getSessionsRevokedEmail(params: {
+  name: string;
+  reason: string;
+  revokedAt: string;
+  ipAddress?: string;
+  device?: string;
+  loginUrl: string;
+}): string {
+  const { name, reason, revokedAt, ipAddress, device, loginUrl } = params;
+  return `<!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>${title}</title>
-  <style>${baseStyles}</style>
-</head>
-<body>
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/><title>Sessions Signed Out</title></head>
+<body style="margin:0;padding:0;background:#f0f2f5;font-family:'Segoe UI',Helvetica,Arial,sans-serif;">
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f0f2f5;padding:40px 16px;">
   <tr><td align="center">
     <table role="presentation" width="100%" style="max-width:480px;background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 4px 28px rgba(0,0,0,0.09);">
 
-      <!-- Header -->
       <tr>
-        <td style="background:${headerColor};padding:32px 40px;text-align:center;">
-          <div style="display:inline-block;background:rgba(255,255,255,0.15);border-radius:50%;width:54px;height:54px;line-height:54px;font-size:26px;margin-bottom:12px;">${icon}</div>
-          <h1 style="margin:0;color:#ffffff;font-size:21px;font-weight:700;letter-spacing:0.4px;">${title}</h1>
-          <p style="margin:6px 0 0;color:rgba(255,255,255,0.65);font-size:13px;">${subtitle}</p>
+        <td style="background:linear-gradient(135deg,#1e1b4b,#4f46e5);padding:32px 40px;text-align:center;">
+          <div style="display:inline-block;background:rgba(255,255,255,0.15);border-radius:50%;width:54px;height:54px;line-height:54px;font-size:26px;margin-bottom:12px;">🔐</div>
+          <h1 style="margin:0;color:#fff;font-size:21px;font-weight:700;letter-spacing:0.4px;">All sessions signed out</h1>
+          <p style="margin:6px 0 0;color:rgba(255,255,255,0.65);font-size:13px;">Security notification</p>
         </td>
       </tr>
 
-      <!-- Body -->
-      ${body}
+      <tr><td style="padding:28px 40px 0;">
+        <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.7;">Hi <strong>${name}</strong>, all your active sessions have been signed out.</p>
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+          <tr><td style="padding:7px 0;border-bottom:1px solid #f3f4f6;">
+            <span style="font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Reason</span>
+            <p style="margin:3px 0 0;font-size:14px;font-weight:600;color:#1a1a2e;">${reason}</p>
+          </td></tr>
+          <tr><td style="padding:7px 0;border-bottom:1px solid #f3f4f6;">
+            <span style="font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Time</span>
+            <p style="margin:3px 0 0;font-size:14px;font-weight:600;color:#1a1a2e;">${revokedAt}</p>
+          </td></tr>
+          ${ipAddress ? `<tr><td style="padding:7px 0;border-bottom:1px solid #f3f4f6;">
+            <span style="font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;font-weight:600;">IP Address</span>
+            <p style="margin:3px 0 0;font-size:14px;font-weight:600;color:#1a1a2e;">${ipAddress}</p>
+          </td></tr>` : ""}
+          ${device ? `<tr><td style="padding:7px 0;">
+            <span style="font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Device</span>
+            <p style="margin:3px 0 0;font-size:14px;font-weight:600;color:#1a1a2e;">${device}</p>
+          </td></tr>` : ""}
+        </table>
+      </td></tr>
 
-      <!-- Footer -->
-      <tr>
-        <td style="background:#f8f9fb;border-top:1px solid #f0f0f0;padding:16px 40px;text-align:center;border-radius:0 0 14px 14px;">
-          <p style="margin:0;color:#9ca3af;font-size:12px;line-height:1.6;">This is an automated security notification. Do not reply to this email.</p>
-        </td>
-      </tr>
+      <tr><td style="padding:20px 40px 0;">
+        <div style="background:#fff8f0;border:1px solid #fde8c8;border-radius:8px;padding:12px 16px;">
+          <p style="margin:0;color:#92400e;font-size:13px;line-height:1.5;">⚠️ If this wasn't you, your account may be compromised. Change your password immediately.</p>
+        </div>
+      </td></tr>
+
+      <tr><td style="padding:24px 40px 32px;text-align:center;">
+        <a href="${loginUrl}" target="_blank" style="display:inline-block;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 30px;border-radius:8px;">Sign in again &rarr;</a>
+      </td></tr>
+
+      <tr><td style="background:#f8f9fb;border-top:1px solid #f0f0f0;padding:16px 40px;text-align:center;">
+        <p style="margin:0;color:#9ca3af;font-size:12px;line-height:1.6;">This is an automated security notification. Do not reply to this email.</p>
+      </td></tr>
 
     </table>
   </td></tr>
 </table>
-</body>
-</html>`;
+</body></html>`;
 }
 
-function infoRow(label: string, value: string): string {
-	return `
-  <tr>
-    <td style="padding:7px 0;border-bottom:1px solid #f3f4f6;">
-      <span style="font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;font-weight:600;">${label}</span>
-      <p style="margin:3px 0 0;font-size:14px;font-weight:600;color:#1a1a2e;">${value}</p>
-    </td>
-  </tr>`;
-}
-
-function ctaButton(
-	href: string,
-	text: string,
-	color = "linear-gradient(135deg,#0f3460,#1a1a8c)",
-): string {
-	return `<a href="${href}" target="_blank" style="display:inline-block;background:${color};color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 30px;border-radius:8px;letter-spacing:0.3px;">${text} &rarr;</a>`;
-}
-
-function warningBox(text: string): string {
-	return `<div style="background:#fff8f0;border:1px solid #fde8c8;border-radius:8px;padding:12px 16px;margin-top:8px;">
-    <p style="margin:0;color:#92400e;font-size:13px;line-height:1.5;">⚠️ ${text}</p>
-  </div>`;
-}
-
-function successBadge(text: string): string {
-	return `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px 16px;margin-top:8px;">
-    <p style="margin:0;color:#14532d;font-size:13px;line-height:1.5;">✅ ${text}</p>
-  </div>`;
-}
-
-function detailsBlock(rows: string): string {
-	return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:4px;">
-    ${rows}
-  </table>`;
-}
 
 // ─────────────────────────────────────────────
-// 1. SESSIONS REVOKED
-// Dynamic reason passed in — e.g. "suspicious login detected", "password changed", "admin action"
+// 4. PRIMARY EMAIL UPDATED
 // ─────────────────────────────────────────────
-export function sessionsRevokedEmail(params: {
-	name: string;
-	reason: string; // e.g. "suspicious activity detected from an unknown device"
-	revokedAt: string; // e.g. "June 3, 2025 at 10:42 AM UTC"
-	ipAddress?: string;
-	device?: string;
-	loginUrl: string;
+export function getPrimaryEmailUpdatedEmail(params: {
+  name: string;
+  oldEmail: string;
+  newEmail: string;
+  updatedAt: string;
+  revertUrl: string;
 }): string {
-	const { name, reason, revokedAt, ipAddress, device, loginUrl } = params;
-	const body = `
-  <tr><td style="padding:28px 40px 0;">
-    <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.7;">Hi <strong>${name}</strong>, all your active sessions have been signed out.</p>
-    ${detailsBlock(`
-      ${infoRow("Reason", reason)}
-      ${infoRow("Time", revokedAt)}
-      ${ipAddress ? infoRow("IP Address", ipAddress) : ""}
-      ${device ? infoRow("Device", device) : ""}
-    `)}
-  </td></tr>
-  <tr><td style="padding:20px 40px 0;">${warningBox("If this wasn't you, your account may be compromised. Change your password immediately.")}</td></tr>
-  <tr><td style="padding:24px 40px 32px;text-align:center;">${ctaButton(loginUrl, "Sign in again", "linear-gradient(135deg,#7c3aed,#4f46e5)")}</td></tr>`;
+  const { name, oldEmail, newEmail, updatedAt, revertUrl } = params;
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/><title>Primary Email Updated</title></head>
+<body style="margin:0;padding:0;background:#f0f2f5;font-family:'Segoe UI',Helvetica,Arial,sans-serif;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f0f2f5;padding:40px 16px;">
+  <tr><td align="center">
+    <table role="presentation" width="100%" style="max-width:480px;background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 4px 28px rgba(0,0,0,0.09);">
 
-	return shell(
-		"linear-gradient(135deg,#1e1b4b,#4f46e5)",
-		"🔐",
-		"All sessions signed out",
-		"Security notification",
-		body,
-	);
+      <tr>
+        <td style="background:linear-gradient(135deg,#1a1a2e,#0f3460);padding:32px 40px;text-align:center;">
+          <div style="display:inline-block;background:rgba(255,255,255,0.15);border-radius:50%;width:54px;height:54px;line-height:54px;font-size:26px;margin-bottom:12px;">✉️</div>
+          <h1 style="margin:0;color:#fff;font-size:21px;font-weight:700;letter-spacing:0.4px;">Primary email updated</h1>
+          <p style="margin:6px 0 0;color:rgba(255,255,255,0.65);font-size:13px;">Account security alert</p>
+        </td>
+      </tr>
+
+      <tr><td style="padding:28px 40px 0;">
+        <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.7;">Hi <strong>${name}</strong>, your primary email address has been updated.</p>
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+          <tr><td style="padding:7px 0;border-bottom:1px solid #f3f4f6;">
+            <span style="font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Previous email</span>
+            <p style="margin:3px 0 0;font-size:14px;font-weight:600;color:#1a1a2e;">${oldEmail}</p>
+          </td></tr>
+          <tr><td style="padding:7px 0;border-bottom:1px solid #f3f4f6;">
+            <span style="font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;font-weight:600;">New email</span>
+            <p style="margin:3px 0 0;font-size:14px;font-weight:600;color:#1a1a2e;">${newEmail}</p>
+          </td></tr>
+          <tr><td style="padding:7px 0;">
+            <span style="font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Updated on</span>
+            <p style="margin:3px 0 0;font-size:14px;font-weight:600;color:#1a1a2e;">${updatedAt}</p>
+          </td></tr>
+        </table>
+      </td></tr>
+
+      <tr><td style="padding:20px 40px 0;">
+        <div style="background:#fff8f0;border:1px solid #fde8c8;border-radius:8px;padding:12px 16px;">
+          <p style="margin:0;color:#92400e;font-size:13px;line-height:1.5;">⚠️ Didn't make this change? Revert it immediately using the button below.</p>
+        </div>
+      </td></tr>
+
+      <tr><td style="padding:24px 40px 32px;text-align:center;">
+        <a href="${revertUrl}" target="_blank" style="display:inline-block;background:linear-gradient(135deg,#0f3460,#1a1a8c);color:#fff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 30px;border-radius:8px;">Revert this change &rarr;</a>
+      </td></tr>
+
+      <tr><td style="background:#f8f9fb;border-top:1px solid #f0f0f0;padding:16px 40px;text-align:center;">
+        <p style="margin:0;color:#9ca3af;font-size:12px;line-height:1.6;">This is an automated security notification. Do not reply to this email.</p>
+      </td></tr>
+
+    </table>
+  </td></tr>
+</table>
+</body></html>`;
 }
 
+
 // ─────────────────────────────────────────────
-// 2. PRIMARY EMAIL UPDATED
+// 5. TWO-FACTOR AUTHENTICATION UPDATED
+// action: e.g. "enabled", "disabled", "changed to authenticator app"
 // ─────────────────────────────────────────────
-export function primaryEmailUpdatedEmail(params: {
-	name: string;
-	oldEmail: string;
-	newEmail: string;
-	updatedAt: string;
-	revertUrl: string;
+export function getTwoFactorUpdatedEmail(params: {
+  name: string;
+  action: string;
+  updatedAt: string;
+  device?: string;
+  supportUrl: string;
 }): string {
-	const { name, oldEmail, newEmail, updatedAt, revertUrl } = params;
-	const body = `
-  <tr><td style="padding:28px 40px 0;">
-    <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.7;">Hi <strong>${name}</strong>, your primary email address has been updated.</p>
-    ${detailsBlock(`
-      ${infoRow("Previous email", oldEmail)}
-      ${infoRow("New email", newEmail)}
-      ${infoRow("Updated on", updatedAt)}
-    `)}
-  </td></tr>
-  <tr><td style="padding:20px 40px 0;">${warningBox("Didn't make this change? Revert it immediately using the button below.")}</td></tr>
-  <tr><td style="padding:24px 40px 32px;text-align:center;">${ctaButton(revertUrl, "Revert this change")}</td></tr>`;
+  const { name, action, updatedAt, device, supportUrl } = params;
+  const isDisabled = action.toLowerCase().includes("disabled");
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/><title>Two-Factor Authentication ${action}</title></head>
+<body style="margin:0;padding:0;background:#f0f2f5;font-family:'Segoe UI',Helvetica,Arial,sans-serif;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f0f2f5;padding:40px 16px;">
+  <tr><td align="center">
+    <table role="presentation" width="100%" style="max-width:480px;background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 4px 28px rgba(0,0,0,0.09);">
 
-	return shell(
-		"linear-gradient(135deg,#1a1a2e,#0f3460)",
-		"✉️",
-		"Primary email updated",
-		"Account security alert",
-		body,
-	);
+      <tr>
+        <td style="background:${isDisabled ? "linear-gradient(135deg,#7f1d1d,#dc2626)" : "linear-gradient(135deg,#14532d,#16a34a)"};padding:32px 40px;text-align:center;">
+          <div style="display:inline-block;background:rgba(255,255,255,0.15);border-radius:50%;width:54px;height:54px;line-height:54px;font-size:26px;margin-bottom:12px;">${isDisabled ? "🔓" : "🛡️"}</div>
+          <h1 style="margin:0;color:#fff;font-size:21px;font-weight:700;letter-spacing:0.4px;">Two-factor authentication ${action}</h1>
+          <p style="margin:6px 0 0;color:rgba(255,255,255,0.65);font-size:13px;">Account security update</p>
+        </td>
+      </tr>
+
+      <tr><td style="padding:28px 40px 0;">
+        <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.7;">Hi <strong>${name}</strong>, two-factor authentication on your account has been <strong>${action}</strong>.</p>
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+          <tr><td style="padding:7px 0;border-bottom:1px solid #f3f4f6;">
+            <span style="font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Change</span>
+            <p style="margin:3px 0 0;font-size:14px;font-weight:600;color:#1a1a2e;">2FA ${action}</p>
+          </td></tr>
+          <tr><td style="padding:7px 0;border-bottom:1px solid #f3f4f6;">
+            <span style="font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Time</span>
+            <p style="margin:3px 0 0;font-size:14px;font-weight:600;color:#1a1a2e;">${updatedAt}</p>
+          </td></tr>
+          ${device ? `<tr><td style="padding:7px 0;">
+            <span style="font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Device</span>
+            <p style="margin:3px 0 0;font-size:14px;font-weight:600;color:#1a1a2e;">${device}</p>
+          </td></tr>` : ""}
+        </table>
+      </td></tr>
+
+      <tr><td style="padding:20px 40px 0;">
+        ${isDisabled
+          ? `<div style="background:#fff8f0;border:1px solid #fde8c8;border-radius:8px;padding:12px 16px;"><p style="margin:0;color:#92400e;font-size:13px;line-height:1.5;">⚠️ Disabling 2FA reduces your account security. If this wasn't you, contact support immediately.</p></div>`
+          : `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px 16px;"><p style="margin:0;color:#14532d;font-size:13px;line-height:1.5;">✅ Your account is now better protected with two-factor authentication.</p></div>`}
+      </td></tr>
+
+      <tr><td style="padding:24px 40px 32px;text-align:center;">
+        <a href="${supportUrl}" target="_blank" style="display:inline-block;background:linear-gradient(135deg,#0f3460,#1a1a8c);color:#fff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 30px;border-radius:8px;">Contact support if this wasn't you &rarr;</a>
+      </td></tr>
+
+      <tr><td style="background:#f8f9fb;border-top:1px solid #f0f0f0;padding:16px 40px;text-align:center;">
+        <p style="margin:0;color:#9ca3af;font-size:12px;line-height:1.6;">This is an automated security notification. Do not reply to this email.</p>
+      </td></tr>
+
+    </table>
+  </td></tr>
+</table>
+</body></html>`;
 }
 
+
 // ─────────────────────────────────────────────
-// 3. TWO-FACTOR AUTHENTICATION UPDATED
-// action: "enabled" | "disabled" | "method changed"
+// 6. RECOVERY EMAIL UPDATED
 // ─────────────────────────────────────────────
-export function twoFactorUpdatedEmail(params: {
-	name: string;
-	action: string; // e.g. "enabled", "disabled", "changed to authenticator app"
-	updatedAt: string;
-	device?: string;
-	supportUrl: string;
+export function getRecoveryEmailUpdatedEmail(params: {
+  name: string;
+  oldRecoveryEmail: string;
+  newRecoveryEmail: string;
+  updatedAt: string;
+  revertUrl: string;
 }): string {
-	const { name, action, updatedAt, device, supportUrl } = params;
-	const isDisabled = action.toLowerCase().includes("disabled");
-	const body = `
-  <tr><td style="padding:28px 40px 0;">
-    <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.7;">Hi <strong>${name}</strong>, two-factor authentication on your account has been <strong>${action}</strong>.</p>
-    ${detailsBlock(`
-      ${infoRow("Change", `2FA ${action}`)}
-      ${infoRow("Time", updatedAt)}
-      ${device ? infoRow("Device", device) : ""}
-    `)}
-  </td></tr>
-  <tr><td style="padding:20px 40px 0;">
-    ${
-			isDisabled
-				? warningBox(
-						"Disabling 2FA reduces your account security. If this wasn't you, contact support immediately.",
-					)
-				: successBadge(
-						"Your account is now better protected with two-factor authentication.",
-					)
-		}
-  </td></tr>
-  <tr><td style="padding:24px 40px 32px;text-align:center;">${ctaButton(supportUrl, "Contact support if this wasn't you")}</td></tr>`;
+  const { name, oldRecoveryEmail, newRecoveryEmail, updatedAt, revertUrl } = params;
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/><title>Recovery Email Updated</title></head>
+<body style="margin:0;padding:0;background:#f0f2f5;font-family:'Segoe UI',Helvetica,Arial,sans-serif;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f0f2f5;padding:40px 16px;">
+  <tr><td align="center">
+    <table role="presentation" width="100%" style="max-width:480px;background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 4px 28px rgba(0,0,0,0.09);">
 
-	return shell(
-		isDisabled
-			? "linear-gradient(135deg,#7f1d1d,#dc2626)"
-			: "linear-gradient(135deg,#14532d,#16a34a)",
-		isDisabled ? "🔓" : "🛡️",
-		`Two-factor authentication ${action}`,
-		"Account security update",
-		body,
-	);
+      <tr>
+        <td style="background:linear-gradient(135deg,#1a1a2e,#1e3a5f);padding:32px 40px;text-align:center;">
+          <div style="display:inline-block;background:rgba(255,255,255,0.15);border-radius:50%;width:54px;height:54px;line-height:54px;font-size:26px;margin-bottom:12px;">📬</div>
+          <h1 style="margin:0;color:#fff;font-size:21px;font-weight:700;letter-spacing:0.4px;">Recovery email updated</h1>
+          <p style="margin:6px 0 0;color:rgba(255,255,255,0.65);font-size:13px;">Account security alert</p>
+        </td>
+      </tr>
+
+      <tr><td style="padding:28px 40px 0;">
+        <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.7;">Hi <strong>${name}</strong>, your account recovery email has been updated.</p>
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+          <tr><td style="padding:7px 0;border-bottom:1px solid #f3f4f6;">
+            <span style="font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Previous recovery email</span>
+            <p style="margin:3px 0 0;font-size:14px;font-weight:600;color:#1a1a2e;">${oldRecoveryEmail}</p>
+          </td></tr>
+          <tr><td style="padding:7px 0;border-bottom:1px solid #f3f4f6;">
+            <span style="font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;font-weight:600;">New recovery email</span>
+            <p style="margin:3px 0 0;font-size:14px;font-weight:600;color:#1a1a2e;">${newRecoveryEmail}</p>
+          </td></tr>
+          <tr><td style="padding:7px 0;">
+            <span style="font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Updated on</span>
+            <p style="margin:3px 0 0;font-size:14px;font-weight:600;color:#1a1a2e;">${updatedAt}</p>
+          </td></tr>
+        </table>
+      </td></tr>
+
+      <tr><td style="padding:20px 40px 0;">
+        <div style="background:#fff8f0;border:1px solid #fde8c8;border-radius:8px;padding:12px 16px;">
+          <p style="margin:0;color:#92400e;font-size:13px;line-height:1.5;">⚠️ If you didn't make this change, someone may have access to your account. Revert immediately.</p>
+        </div>
+      </td></tr>
+
+      <tr><td style="padding:24px 40px 32px;text-align:center;">
+        <a href="${revertUrl}" target="_blank" style="display:inline-block;background:linear-gradient(135deg,#0f3460,#1a1a8c);color:#fff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 30px;border-radius:8px;">Revert this change &rarr;</a>
+      </td></tr>
+
+      <tr><td style="background:#f8f9fb;border-top:1px solid #f0f0f0;padding:16px 40px;text-align:center;">
+        <p style="margin:0;color:#9ca3af;font-size:12px;line-height:1.6;">This is an automated security notification. Do not reply to this email.</p>
+      </td></tr>
+
+    </table>
+  </td></tr>
+</table>
+</body></html>`;
 }
 
+
 // ─────────────────────────────────────────────
-// 4. RECOVERY EMAIL UPDATED
+// 7. ACCOUNT DELETION SCHEDULED
 // ─────────────────────────────────────────────
-export function recoveryEmailUpdatedEmail(params: {
-	name: string;
-	oldRecoveryEmail: string;
-	newRecoveryEmail: string;
-	updatedAt: string;
-	revertUrl: string;
+export function getAccountDeletionEmail(params: {
+  name: string;
+  deletedAt: string;
+  gracePeriodDays: number;
+  recoverUrl: string;
 }): string {
-	const { name, oldRecoveryEmail, newRecoveryEmail, updatedAt, revertUrl } =
-		params;
-	const body = `
-  <tr><td style="padding:28px 40px 0;">
-    <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.7;">Hi <strong>${name}</strong>, your account recovery email has been updated.</p>
-    ${detailsBlock(`
-      ${infoRow("Previous recovery email", oldRecoveryEmail)}
-      ${infoRow("New recovery email", newRecoveryEmail)}
-      ${infoRow("Updated on", updatedAt)}
-    `)}
-  </td></tr>
-  <tr><td style="padding:20px 40px 0;">${warningBox("If you didn't make this change, someone may have access to your account. Revert immediately.")}</td></tr>
-  <tr><td style="padding:24px 40px 32px;text-align:center;">${ctaButton(revertUrl, "Revert this change")}</td></tr>`;
+  const { name, deletedAt, gracePeriodDays, recoverUrl } = params;
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/><title>Account Deletion Scheduled</title></head>
+<body style="margin:0;padding:0;background:#f0f2f5;font-family:'Segoe UI',Helvetica,Arial,sans-serif;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f0f2f5;padding:40px 16px;">
+  <tr><td align="center">
+    <table role="presentation" width="100%" style="max-width:480px;background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 4px 28px rgba(0,0,0,0.09);">
 
-	return shell(
-		"linear-gradient(135deg,#1a1a2e,#1e3a5f)",
-		"📬",
-		"Recovery email updated",
-		"Account security alert",
-		body,
-	);
+      <tr>
+        <td style="background:linear-gradient(135deg,#450a0a,#991b1b);padding:32px 40px;text-align:center;">
+          <div style="display:inline-block;background:rgba(255,255,255,0.15);border-radius:50%;width:54px;height:54px;line-height:54px;font-size:26px;margin-bottom:12px;">🗑️</div>
+          <h1 style="margin:0;color:#fff;font-size:21px;font-weight:700;letter-spacing:0.4px;">Account deletion scheduled</h1>
+          <p style="margin:6px 0 0;color:rgba(255,255,255,0.65);font-size:13px;">We're sorry to see you go</p>
+        </td>
+      </tr>
+
+      <tr><td style="padding:28px 40px 0;">
+        <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.7;">Hi <strong>${name}</strong>, your account has been scheduled for deletion.</p>
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+          <tr><td style="padding:7px 0;border-bottom:1px solid #f3f4f6;">
+            <span style="font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Deletion requested</span>
+            <p style="margin:3px 0 0;font-size:14px;font-weight:600;color:#1a1a2e;">${deletedAt}</p>
+          </td></tr>
+          <tr><td style="padding:7px 0;border-bottom:1px solid #f3f4f6;">
+            <span style="font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Grace period</span>
+            <p style="margin:3px 0 0;font-size:14px;font-weight:600;color:#1a1a2e;">${gracePeriodDays} days</p>
+          </td></tr>
+          <tr><td style="padding:7px 0;">
+            <span style="font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Data wiped after</span>
+            <p style="margin:3px 0 0;font-size:14px;font-weight:600;color:#1a1a2e;">Grace period ends</p>
+          </td></tr>
+        </table>
+      </td></tr>
+
+      <tr><td style="padding:20px 40px 0;">
+        <div style="background:#fff8f0;border:1px solid #fde8c8;border-radius:8px;padding:12px 16px;">
+          <p style="margin:0;color:#92400e;font-size:13px;line-height:1.5;">⚠️ You have <strong>${gracePeriodDays} days</strong> to recover your account. After that, all data will be permanently deleted and cannot be restored.</p>
+        </div>
+      </td></tr>
+
+      <tr><td style="padding:24px 40px 32px;text-align:center;">
+        <a href="${recoverUrl}" target="_blank" style="display:inline-block;background:linear-gradient(135deg,#7c3aed,#db2777);color:#fff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 30px;border-radius:8px;">Recover my account &rarr;</a>
+      </td></tr>
+
+      <tr><td style="background:#f8f9fb;border-top:1px solid #f0f0f0;padding:16px 40px;text-align:center;">
+        <p style="margin:0;color:#9ca3af;font-size:12px;line-height:1.6;">This is an automated security notification. Do not reply to this email.</p>
+      </td></tr>
+
+    </table>
+  </td></tr>
+</table>
+</body></html>`;
 }
 
+
 // ─────────────────────────────────────────────
-// 5. ACCOUNT DELETION CONFIRMATION
+// 8. ACCOUNT RECOVERED
 // ─────────────────────────────────────────────
-export function accountDeletionEmail(params: {
-	name: string;
-	deletedAt: string;
-	gracePeriodDays: number; // how many days until permanently gone
-	recoverUrl: string;
+export function getAccountRecoveredEmail(params: {
+  name: string;
+  recoveredAt: string;
+  dashboardUrl: string;
 }): string {
-	const { name, deletedAt, gracePeriodDays, recoverUrl } = params;
-	const body = `
-  <tr><td style="padding:28px 40px 0;">
-    <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.7;">Hi <strong>${name}</strong>, your account has been scheduled for deletion.</p>
-    ${detailsBlock(`
-      ${infoRow("Deletion requested", deletedAt)}
-      ${infoRow("Permanent deletion in", `${gracePeriodDays} days`)}
-      ${infoRow("Data wiped after", `Grace period ends`)}
-    `)}
-  </td></tr>
-  <tr><td style="padding:20px 40px 0;">${warningBox(`You have ${gracePeriodDays} days to recover your account. After that, all data will be permanently deleted and cannot be restored.`)}</td></tr>
-  <tr><td style="padding:24px 40px 32px;text-align:center;">${ctaButton(recoverUrl, "Recover my account", "linear-gradient(135deg,#7c3aed,#db2777)")}</td></tr>`;
+  const { name, recoveredAt, dashboardUrl } = params;
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/><title>Account Recovered</title></head>
+<body style="margin:0;padding:0;background:#f0f2f5;font-family:'Segoe UI',Helvetica,Arial,sans-serif;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f0f2f5;padding:40px 16px;">
+  <tr><td align="center">
+    <table role="presentation" width="100%" style="max-width:480px;background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 4px 28px rgba(0,0,0,0.09);">
 
-	return shell(
-		"linear-gradient(135deg,#450a0a,#991b1b)",
-		"🗑️",
-		"Account deletion scheduled",
-		"We're sorry to see you go",
-		body,
-	);
+      <tr>
+        <td style="background:linear-gradient(135deg,#14532d,#166534);padding:32px 40px;text-align:center;">
+          <div style="display:inline-block;background:rgba(255,255,255,0.15);border-radius:50%;width:54px;height:54px;line-height:54px;font-size:26px;margin-bottom:12px;">🎉</div>
+          <h1 style="margin:0;color:#fff;font-size:21px;font-weight:700;letter-spacing:0.4px;">Account recovered!</h1>
+          <p style="margin:6px 0 0;color:rgba(255,255,255,0.65);font-size:13px;">Welcome back</p>
+        </td>
+      </tr>
+
+      <tr><td style="padding:28px 40px 0;">
+        <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.7;">Welcome back, <strong>${name}</strong>! Your account has been successfully recovered.</p>
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+          <tr><td style="padding:7px 0;border-bottom:1px solid #f3f4f6;">
+            <span style="font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Recovered on</span>
+            <p style="margin:3px 0 0;font-size:14px;font-weight:600;color:#1a1a2e;">${recoveredAt}</p>
+          </td></tr>
+          <tr><td style="padding:7px 0;">
+            <span style="font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Status</span>
+            <p style="margin:3px 0 0;font-size:14px;font-weight:600;color:#1a1a2e;">Fully active</p>
+          </td></tr>
+        </table>
+      </td></tr>
+
+      <tr><td style="padding:20px 40px 0;">
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px 16px;">
+          <p style="margin:0;color:#14532d;font-size:13px;line-height:1.5;">✅ All your data and settings have been restored. Your account is fully active again.</p>
+        </div>
+      </td></tr>
+
+      <tr><td style="padding:24px 40px 32px;text-align:center;">
+        <a href="${dashboardUrl}" target="_blank" style="display:inline-block;background:linear-gradient(135deg,#14532d,#16a34a);color:#fff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 30px;border-radius:8px;">Go to dashboard &rarr;</a>
+      </td></tr>
+
+      <tr><td style="background:#f8f9fb;border-top:1px solid #f0f0f0;padding:16px 40px;text-align:center;">
+        <p style="margin:0;color:#9ca3af;font-size:12px;line-height:1.6;">This is an automated notification. Do not reply to this email.</p>
+      </td></tr>
+
+    </table>
+  </td></tr>
+</table>
+</body></html>`;
 }
 
+
 // ─────────────────────────────────────────────
-// 6. DELETED ACCOUNT RECOVERED
+// 9. GENERIC ACCOUNT UPDATE SUCCESS
+// Reuse for password, username, profile, notifications, etc.
 // ─────────────────────────────────────────────
-export function accountRecoveredEmail(params: {
-	name: string;
-	recoveredAt: string;
-	dashboardUrl: string;
+export function getAccountUpdateSuccessEmail(params: {
+  name: string;
+  updateType: string;   // e.g. "Password", "Username", "Profile photo"
+  details?: string;
+  updatedAt: string;
+  dashboardUrl: string;
 }): string {
-	const { name, recoveredAt, dashboardUrl } = params;
-	const body = `
-  <tr><td style="padding:28px 40px 0;">
-    <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.7;">Welcome back, <strong>${name}</strong>! Your account has been successfully recovered.</p>
-    ${detailsBlock(`
-      ${infoRow("Recovered on", recoveredAt)}
-      ${infoRow("Status", "Fully active")}
-    `)}
-  </td></tr>
-  <tr><td style="padding:20px 40px 0;">${successBadge("All your data and settings have been restored. Your account is fully active again.")}</td></tr>
-  <tr><td style="padding:24px 40px 32px;text-align:center;">${ctaButton(dashboardUrl, "Go to dashboard", "linear-gradient(135deg,#14532d,#16a34a)")}</td></tr>`;
+  const { name, updateType, details, updatedAt, dashboardUrl } = params;
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/><title>${updateType} Updated</title></head>
+<body style="margin:0;padding:0;background:#f0f2f5;font-family:'Segoe UI',Helvetica,Arial,sans-serif;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f0f2f5;padding:40px 16px;">
+  <tr><td align="center">
+    <table role="presentation" width="100%" style="max-width:480px;background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 4px 28px rgba(0,0,0,0.09);">
 
-	return shell(
-		"linear-gradient(135deg,#14532d,#166534)",
-		"🎉",
-		"Account recovered!",
-		"Welcome back",
-		body,
-	);
+      <tr>
+        <td style="background:linear-gradient(135deg,#1a1a2e,#0f3460);padding:32px 40px;text-align:center;">
+          <div style="display:inline-block;background:rgba(255,255,255,0.15);border-radius:50%;width:54px;height:54px;line-height:54px;font-size:26px;margin-bottom:12px;">✅</div>
+          <h1 style="margin:0;color:#fff;font-size:21px;font-weight:700;letter-spacing:0.4px;">${updateType} updated</h1>
+          <p style="margin:6px 0 0;color:rgba(255,255,255,0.65);font-size:13px;">Account update confirmation</p>
+        </td>
+      </tr>
+
+      <tr><td style="padding:28px 40px 0;">
+        <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.7;">Hi <strong>${name}</strong>, your account has been updated successfully.</p>
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+          <tr><td style="padding:7px 0;border-bottom:1px solid #f3f4f6;">
+            <span style="font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;font-weight:600;">What changed</span>
+            <p style="margin:3px 0 0;font-size:14px;font-weight:600;color:#1a1a2e;">${updateType}</p>
+          </td></tr>
+          ${details ? `<tr><td style="padding:7px 0;border-bottom:1px solid #f3f4f6;">
+            <span style="font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Details</span>
+            <p style="margin:3px 0 0;font-size:14px;font-weight:600;color:#1a1a2e;">${details}</p>
+          </td></tr>` : ""}
+          <tr><td style="padding:7px 0;">
+            <span style="font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Updated on</span>
+            <p style="margin:3px 0 0;font-size:14px;font-weight:600;color:#1a1a2e;">${updatedAt}</p>
+          </td></tr>
+        </table>
+      </td></tr>
+
+      <tr><td style="padding:20px 40px 0;">
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px 16px;">
+          <p style="margin:0;color:#14532d;font-size:13px;line-height:1.5;">✅ Your changes have been saved and are now live on your account.</p>
+        </div>
+      </td></tr>
+
+      <tr><td style="padding:24px 40px 32px;text-align:center;">
+        <a href="${dashboardUrl}" target="_blank" style="display:inline-block;background:linear-gradient(135deg,#0f3460,#1a1a8c);color:#fff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 30px;border-radius:8px;">View account &rarr;</a>
+      </td></tr>
+
+      <tr><td style="background:#f8f9fb;border-top:1px solid #f0f0f0;padding:16px 40px;text-align:center;">
+        <p style="margin:0;color:#9ca3af;font-size:12px;line-height:1.6;">This is an automated notification. Do not reply to this email.</p>
+      </td></tr>
+
+    </table>
+  </td></tr>
+</table>
+</body></html>`;
 }
 
-// ─────────────────────────────────────────────
-// 7. GENERIC ACCOUNT UPDATE SUCCESS
-// Reusable for any settings change: password, username, profile, notifications, etc.
-// ─────────────────────────────────────────────
-export function accountUpdateSuccessEmail(params: {
-	name: string;
-	updateType: string; // e.g. "Password", "Profile photo", "Username", "Notification preferences"
-	details?: string; // optional extra context shown below the update type
-	updatedAt: string;
-	dashboardUrl: string;
-}): string {
-	const { name, updateType, details, updatedAt, dashboardUrl } = params;
-	const body = `
-  <tr><td style="padding:28px 40px 0;">
-    <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.7;">Hi <strong>${name}</strong>, your account has been updated successfully.</p>
-    ${detailsBlock(`
-      ${infoRow("What changed", updateType)}
-      ${details ? infoRow("Details", details) : ""}
-      ${infoRow("Updated on", updatedAt)}
-    `)}
-  </td></tr>
-  <tr><td style="padding:20px 40px 0;">${successBadge("Your changes have been saved and are now live on your account.")}</td></tr>
-  <tr><td style="padding:24px 40px 32px;text-align:center;">${ctaButton(dashboardUrl, "View account")}</td></tr>`;
-
-	return shell(
-		"linear-gradient(135deg,#1a1a2e,#0f3460)",
-		"✅",
-		`${updateType} updated`,
-		"Account update confirmation",
-		body,
-	);
-}
 
 // ─────────────────────────────────────────────
-// 8. SUBSCRIPTION ACTIVATED
+// 10. SUBSCRIPTION ACTIVATED
 // plan: "free" | "basic" | "pro"
 // ─────────────────────────────────────────────
-export function subscriptionActivatedEmail(params: {
-	name: string;
-	plan: "free" | "basic" | "pro";
-	activatedAt: string;
-	expiresAt?: string; // undefined for free plan
-	amount?: string; // e.g. "₹499" — undefined for free
-	dashboardUrl: string;
+export function getSubscriptionActivatedEmail(params: {
+  name: string;
+  plan: "free" | "basic" | "pro";
+  activatedAt: string;
+  expiresAt?: string;
+  amount?: string;
+  dashboardUrl: string;
 }): string {
-	const { name, plan, activatedAt, expiresAt, amount, dashboardUrl } = params;
+  const { name, plan, activatedAt, expiresAt, amount, dashboardUrl } = params;
+  const planLabel = plan.charAt(0).toUpperCase() + plan.slice(1);
+  const colors = { free: "linear-gradient(135deg,#374151,#6b7280)", basic: "linear-gradient(135deg,#1d4ed8,#3b82f6)", pro: "linear-gradient(135deg,#7c3aed,#a855f7)" };
+  const icons  = { free: "🆓", basic: "⚡", pro: "👑" };
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/><title>${planLabel} Plan Activated</title></head>
+<body style="margin:0;padding:0;background:#f0f2f5;font-family:'Segoe UI',Helvetica,Arial,sans-serif;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f0f2f5;padding:40px 16px;">
+  <tr><td align="center">
+    <table role="presentation" width="100%" style="max-width:480px;background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 4px 28px rgba(0,0,0,0.09);">
 
-	const planColors: Record<string, string> = {
-		free: "linear-gradient(135deg,#374151,#6b7280)",
-		basic: "linear-gradient(135deg,#1d4ed8,#3b82f6)",
-		pro: "linear-gradient(135deg,#7c3aed,#a855f7)",
-	};
-	const planIcons: Record<string, string> = {
-		free: "🆓",
-		basic: "⚡",
-		pro: "👑",
-	};
+      <tr>
+        <td style="background:${colors[plan]};padding:32px 40px;text-align:center;">
+          <div style="display:inline-block;background:rgba(255,255,255,0.15);border-radius:50%;width:54px;height:54px;line-height:54px;font-size:26px;margin-bottom:12px;">${icons[plan]}</div>
+          <h1 style="margin:0;color:#fff;font-size:21px;font-weight:700;letter-spacing:0.4px;">${planLabel} plan activated</h1>
+          <p style="margin:6px 0 0;color:rgba(255,255,255,0.65);font-size:13px;">Subscription confirmation</p>
+        </td>
+      </tr>
 
-	const body = `
-  <tr><td style="padding:28px 40px 0;">
-    <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.7;">Hi <strong>${name}</strong>, your <strong>${plan.charAt(0).toUpperCase() + plan.slice(1)}</strong> plan is now active!</p>
-    ${detailsBlock(`
-      ${infoRow("Plan", plan.charAt(0).toUpperCase() + plan.slice(1))}
-      ${amount ? infoRow("Amount paid", amount) : ""}
-      ${infoRow("Activated on", activatedAt)}
-      ${expiresAt ? infoRow("Valid until", expiresAt) : infoRow("Duration", "Lifetime free")}
-    `)}
+      <tr><td style="padding:28px 40px 0;">
+        <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.7;">Hi <strong>${name}</strong>, your <strong>${planLabel}</strong> plan is now active!</p>
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+          <tr><td style="padding:7px 0;border-bottom:1px solid #f3f4f6;">
+            <span style="font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Plan</span>
+            <p style="margin:3px 0 0;font-size:14px;font-weight:600;color:#1a1a2e;">${planLabel}</p>
+          </td></tr>
+          ${amount ? `<tr><td style="padding:7px 0;border-bottom:1px solid #f3f4f6;">
+            <span style="font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Amount paid</span>
+            <p style="margin:3px 0 0;font-size:14px;font-weight:600;color:#1a1a2e;">${amount}</p>
+          </td></tr>` : ""}
+          <tr><td style="padding:7px 0;border-bottom:1px solid #f3f4f6;">
+            <span style="font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Activated on</span>
+            <p style="margin:3px 0 0;font-size:14px;font-weight:600;color:#1a1a2e;">${activatedAt}</p>
+          </td></tr>
+          <tr><td style="padding:7px 0;">
+            <span style="font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Valid until</span>
+            <p style="margin:3px 0 0;font-size:14px;font-weight:600;color:#1a1a2e;">${expiresAt ?? "Lifetime free"}</p>
+          </td></tr>
+        </table>
+      </td></tr>
+
+      <tr><td style="padding:20px 40px 0;">
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px 16px;">
+          <p style="margin:0;color:#14532d;font-size:13px;line-height:1.5;">✅ You now have full access to all ${planLabel} features.</p>
+        </div>
+      </td></tr>
+
+      <tr><td style="padding:24px 40px 32px;text-align:center;">
+        <a href="${dashboardUrl}" target="_blank" style="display:inline-block;background:${colors[plan]};color:#fff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 30px;border-radius:8px;">Explore your plan &rarr;</a>
+      </td></tr>
+
+      <tr><td style="background:#f8f9fb;border-top:1px solid #f0f0f0;padding:16px 40px;text-align:center;">
+        <p style="margin:0;color:#9ca3af;font-size:12px;line-height:1.6;">This is an automated notification. Do not reply to this email.</p>
+      </td></tr>
+
+    </table>
   </td></tr>
-  <tr><td style="padding:20px 40px 0;">${successBadge(`You now have full access to all ${plan} features.`)}</td></tr>
-  <tr><td style="padding:24px 40px 32px;text-align:center;">${ctaButton(dashboardUrl, "Explore your plan", planColors[plan])}</td></tr>`;
-
-	return shell(
-		planColors[plan] as string,
-		planIcons[plan] as string,
-		`${plan.charAt(0).toUpperCase() + plan.slice(1)} plan activated`,
-		"Subscription confirmation",
-		body,
-	);
+</table>
+</body></html>`;
 }
 
-// ─────────────────────────────────────────────
-// 9. SUBSCRIPTION EXPIRY REMINDER (tenure ending soon)
-// Send this 3–5 days before expiry
-// ─────────────────────────────────────────────
-export function subscriptionExpiryReminderEmail(params: {
-	name: string;
-	plan: "basic" | "pro";
-	expiresAt: string; // e.g. "June 10, 2025"
-	daysLeft: number; // e.g. 3
-	renewUrl: string;
-}): string {
-	const { name, plan, expiresAt, daysLeft, renewUrl } = params;
-	const body = `
-  <tr><td style="padding:28px 40px 0;">
-    <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.7;">Hi <strong>${name}</strong>, your <strong>${plan.charAt(0).toUpperCase() + plan.slice(1)}</strong> subscription is expiring soon.</p>
-    ${detailsBlock(`
-      ${infoRow("Plan", plan.charAt(0).toUpperCase() + plan.slice(1))}
-      ${infoRow("Expires on", expiresAt)}
-      ${infoRow("Days remaining", `${daysLeft} day${daysLeft !== 1 ? "s" : ""}`)}
-    `)}
-  </td></tr>
-  <tr><td style="padding:20px 40px 0;">${warningBox(`Renew before ${expiresAt} to avoid losing access to ${plan} features.`)}</td></tr>
-  <tr><td style="padding:24px 40px 32px;text-align:center;">${ctaButton(renewUrl, "Renew now", "linear-gradient(135deg,#b45309,#d97706)")}</td></tr>`;
 
-	return shell(
-		"linear-gradient(135deg,#78350f,#b45309)",
-		"⏳",
-		"Your plan expires soon",
-		`${daysLeft} day${daysLeft !== 1 ? "s" : ""} remaining`,
-		body,
-	);
+// ─────────────────────────────────────────────
+// 11. SUBSCRIPTION EXPIRY REMINDER
+// Send 3–5 days before expiry
+// ─────────────────────────────────────────────
+export function getSubscriptionExpiryReminderEmail(params: {
+  name: string;
+  plan: "basic" | "pro";
+  expiresAt: string;
+  daysLeft: number;
+  renewUrl: string;
+}): string {
+  const { name, plan, expiresAt, daysLeft, renewUrl } = params;
+  const planLabel = plan.charAt(0).toUpperCase() + plan.slice(1);
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/><title>Your ${planLabel} Plan Expires Soon</title></head>
+<body style="margin:0;padding:0;background:#f0f2f5;font-family:'Segoe UI',Helvetica,Arial,sans-serif;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f0f2f5;padding:40px 16px;">
+  <tr><td align="center">
+    <table role="presentation" width="100%" style="max-width:480px;background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 4px 28px rgba(0,0,0,0.09);">
+
+      <tr>
+        <td style="background:linear-gradient(135deg,#78350f,#b45309);padding:32px 40px;text-align:center;">
+          <div style="display:inline-block;background:rgba(255,255,255,0.15);border-radius:50%;width:54px;height:54px;line-height:54px;font-size:26px;margin-bottom:12px;">⏳</div>
+          <h1 style="margin:0;color:#fff;font-size:21px;font-weight:700;letter-spacing:0.4px;">Your plan expires soon</h1>
+          <p style="margin:6px 0 0;color:rgba(255,255,255,0.65);font-size:13px;">${daysLeft} day${daysLeft !== 1 ? "s" : ""} remaining</p>
+        </td>
+      </tr>
+
+      <tr><td style="padding:28px 40px 0;">
+        <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.7;">Hi <strong>${name}</strong>, your <strong>${planLabel}</strong> subscription is expiring soon.</p>
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+          <tr><td style="padding:7px 0;border-bottom:1px solid #f3f4f6;">
+            <span style="font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Plan</span>
+            <p style="margin:3px 0 0;font-size:14px;font-weight:600;color:#1a1a2e;">${planLabel}</p>
+          </td></tr>
+          <tr><td style="padding:7px 0;border-bottom:1px solid #f3f4f6;">
+            <span style="font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Expires on</span>
+            <p style="margin:3px 0 0;font-size:14px;font-weight:600;color:#1a1a2e;">${expiresAt}</p>
+          </td></tr>
+          <tr><td style="padding:7px 0;">
+            <span style="font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Days remaining</span>
+            <p style="margin:3px 0 0;font-size:14px;font-weight:600;color:#ef4444;">${daysLeft} day${daysLeft !== 1 ? "s" : ""}</p>
+          </td></tr>
+        </table>
+      </td></tr>
+
+      <tr><td style="padding:20px 40px 0;">
+        <div style="background:#fff8f0;border:1px solid #fde8c8;border-radius:8px;padding:12px 16px;">
+          <p style="margin:0;color:#92400e;font-size:13px;line-height:1.5;">⚠️ Renew before <strong>${expiresAt}</strong> to avoid losing access to ${planLabel} features.</p>
+        </div>
+      </td></tr>
+
+      <tr><td style="padding:24px 40px 32px;text-align:center;">
+        <a href="${renewUrl}" target="_blank" style="display:inline-block;background:linear-gradient(135deg,#b45309,#d97706);color:#fff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 30px;border-radius:8px;">Renew now &rarr;</a>
+      </td></tr>
+
+      <tr><td style="background:#f8f9fb;border-top:1px solid #f0f0f0;padding:16px 40px;text-align:center;">
+        <p style="margin:0;color:#9ca3af;font-size:12px;line-height:1.6;">This is an automated notification. Do not reply to this email.</p>
+      </td></tr>
+
+    </table>
+  </td></tr>
+</table>
+</body></html>`;
 }
 
+
 // ─────────────────────────────────────────────
-// 10. SUBSCRIPTION EXPIRED + DOWNGRADE NOTICE
+// 12. SUBSCRIPTION EXPIRED + DOWNGRADE NOTICE
 // Send 2–3 days after expiry if not renewed
 // ─────────────────────────────────────────────
-export function subscriptionExpiredEmail(params: {
-	name: string;
-	plan: "basic" | "pro";
-	expiredAt: string;
-	renewUrl: string;
+export function getSubscriptionExpiredEmail(params: {
+  name: string;
+  plan: "basic" | "pro";
+  expiredAt: string;
+  renewUrl: string;
 }): string {
-	const { name, plan, expiredAt, renewUrl } = params;
-	const body = `
-  <tr><td style="padding:28px 40px 0;">
-    <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.7;">Hi <strong>${name}</strong>, your <strong>${plan.charAt(0).toUpperCase() + plan.slice(1)}</strong> subscription has expired.</p>
-    ${detailsBlock(`
-      ${infoRow("Plan", plan.charAt(0).toUpperCase() + plan.slice(1))}
-      ${infoRow("Expired on", expiredAt)}
-      ${infoRow("Current access", "Free plan")}
-    `)}
-  </td></tr>
-  <tr><td style="padding:20px 40px 0;">${warningBox(`You've been moved to the free plan. Renew to restore your ${plan} features.`)}</td></tr>
-  <tr><td style="padding:20px 40px 32px;text-align:center;">${ctaButton(renewUrl, "Renew subscription", "linear-gradient(135deg,#7c3aed,#4f46e5)")}</td></tr>`;
+  const { name, plan, expiredAt, renewUrl } = params;
+  const planLabel = plan.charAt(0).toUpperCase() + plan.slice(1);
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/><title>Subscription Expired</title></head>
+<body style="margin:0;padding:0;background:#f0f2f5;font-family:'Segoe UI',Helvetica,Arial,sans-serif;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f0f2f5;padding:40px 16px;">
+  <tr><td align="center">
+    <table role="presentation" width="100%" style="max-width:480px;background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 4px 28px rgba(0,0,0,0.09);">
 
-	return shell(
-		"linear-gradient(135deg,#1f2937,#374151)",
-		"📭",
-		"Subscription expired",
-		"Your plan has ended",
-		body,
-	);
+      <tr>
+        <td style="background:linear-gradient(135deg,#1f2937,#374151);padding:32px 40px;text-align:center;">
+          <div style="display:inline-block;background:rgba(255,255,255,0.15);border-radius:50%;width:54px;height:54px;line-height:54px;font-size:26px;margin-bottom:12px;">📭</div>
+          <h1 style="margin:0;color:#fff;font-size:21px;font-weight:700;letter-spacing:0.4px;">Subscription expired</h1>
+          <p style="margin:6px 0 0;color:rgba(255,255,255,0.65);font-size:13px;">Your plan has ended</p>
+        </td>
+      </tr>
+
+      <tr><td style="padding:28px 40px 0;">
+        <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.7;">Hi <strong>${name}</strong>, your <strong>${planLabel}</strong> subscription has expired.</p>
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+          <tr><td style="padding:7px 0;border-bottom:1px solid #f3f4f6;">
+            <span style="font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Plan</span>
+            <p style="margin:3px 0 0;font-size:14px;font-weight:600;color:#1a1a2e;">${planLabel}</p>
+          </td></tr>
+          <tr><td style="padding:7px 0;border-bottom:1px solid #f3f4f6;">
+            <span style="font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Expired on</span>
+            <p style="margin:3px 0 0;font-size:14px;font-weight:600;color:#1a1a2e;">${expiredAt}</p>
+          </td></tr>
+          <tr><td style="padding:7px 0;">
+            <span style="font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Current access</span>
+            <p style="margin:3px 0 0;font-size:14px;font-weight:600;color:#1a1a2e;">Free plan</p>
+          </td></tr>
+        </table>
+      </td></tr>
+
+      <tr><td style="padding:20px 40px 0;">
+        <div style="background:#fff8f0;border:1px solid #fde8c8;border-radius:8px;padding:12px 16px;">
+          <p style="margin:0;color:#92400e;font-size:13px;line-height:1.5;">⚠️ You've been moved to the free plan. Renew to restore your ${planLabel} features.</p>
+        </div>
+      </td></tr>
+
+      <tr><td style="padding:24px 40px 32px;text-align:center;">
+        <a href="${renewUrl}" target="_blank" style="display:inline-block;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 30px;border-radius:8px;">Renew subscription &rarr;</a>
+      </td></tr>
+
+      <tr><td style="background:#f8f9fb;border-top:1px solid #f0f0f0;padding:16px 40px;text-align:center;">
+        <p style="margin:0;color:#9ca3af;font-size:12px;line-height:1.6;">This is an automated notification. Do not reply to this email.</p>
+      </td></tr>
+
+    </table>
+  </td></tr>
+</table>
+</body></html>`;
 }
