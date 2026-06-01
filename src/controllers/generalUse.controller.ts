@@ -9,7 +9,11 @@ import {
 	sendVerificationEmail,
 } from "../services/nodemailer.service.js";
 import { getContactUsHTML } from "../utils/nodemailer.utils.js";
-import { isUserResponse, standardResponse } from "../utils/apiResponse.utils.js";
+import {
+	isUserResponse,
+	standardResponse,
+} from "../utils/apiResponse.utils.js";
+import { usernameSchema } from "../libs/zod/auth.zodschema.js";
 
 export const isUserController = async (
 	req: Request,
@@ -23,14 +27,27 @@ export const isUserController = async (
 			config.ACCESS_TOKEN_JWT_SECRET,
 		) as JwtPayload;
 		if (!decoded) {
-			return res.status(401).json(isUserResponse(false, "Invalid token", false, null));
+			return res
+				.status(401)
+				.json(isUserResponse(false, "Invalid token", false, null));
 		}
 		const user = await userModel.findById(decoded.id);
 		if (!user) {
-			return res.status(404).json(isUserResponse(false, "User not found", false, null));
+			return res
+				.status(404)
+				.json(isUserResponse(false, "User not found", false, null));
 		}
 		if (user.status !== "active") {
-				return res.status(403).json(isUserResponse(false, "User is not verified or Account is Inactive/Suspended", false, null));
+			return res
+				.status(403)
+				.json(
+					isUserResponse(
+						false,
+						"User is not verified or Account is Inactive/Suspended",
+						false,
+						null,
+					),
+				);
 		}
 		if (user.isPhoneVerified) {
 			const userObj = {
@@ -85,7 +102,40 @@ export const contactUsEmailController = async (
 
 		await sendContactUsEmail(email, config.GMAIL_USER_EMAIL, name, html);
 
-		res.status(200).json(standardResponse(true, "Your message has been sent successfully"));
+		res
+			.status(200)
+			.json(standardResponse(true, "Your message has been sent successfully"));
+	} catch (error) {
+		next(error);
+	}
+};
+
+export const checkUsernameController = async (
+	req: Request,
+	res: Response,
+	next: NextFunction,
+) => {
+	try {
+		const { username }= req.query;
+		console.log(username, typeof username);
+		if (!username || typeof username !== "string") {
+			return res
+				.status(400)
+				.json(
+					standardResponse(false, "Username is required and must be a string"),
+				);
+		}
+
+		const existingUser = await userModel.findOne({ username });
+		if (existingUser) {
+			return res
+				.status(409)
+				.json(standardResponse(false, "Username is already taken"));
+		}
+
+		return res
+			.status(200)
+			.json(standardResponse(true, "Username is available"));
 	} catch (error) {
 		next(error);
 	}
