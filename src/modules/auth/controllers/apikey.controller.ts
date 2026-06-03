@@ -120,3 +120,72 @@ export const createApiKey = async (
 		next(error);
 	}
 };
+
+export const listApiKeys = async (
+	req: Request,
+	res: Response,
+	next: NextFunction,
+) => {
+	try {
+		if (!req.cookies.acToken) {
+			return res
+				.status(401)
+				.json(standardResponse(false, "Unauthorized"));
+		}
+
+		const decoded = jwt.verify(
+			req.cookies.acToken,
+			config.ACCESS_TOKEN_JWT_SECRET,
+		) as JwtPayload;
+
+		const userId = decoded.userId;
+		const apiKeys = await apiKeyModel.find({ userId }).select('-keyHash').sort({ createdAt: -1 });
+
+		return res.status(200).json(
+			standardResponse(true, "API keys fetched successfully", apiKeys),
+		);
+	} catch (error) {
+		next(error);
+	}
+};
+
+export const revokeApiKey = async (
+	req: Request,
+	res: Response,
+	next: NextFunction,
+) => {
+	try {
+		const { keyId } = req.params;
+		const { reason } = req.body;
+        
+        if(reason && typeof reason !== "string"){
+            return res.status(400).json(standardResponse(false,"Reason must be a string"))
+        }
+
+		if (!req.cookies.acToken) {
+			return res
+				.status(401)
+				.json(standardResponse(false, "Unauthorized"));
+		}
+
+		const decoded = jwt.verify(
+			req.cookies.acToken,
+			config.ACCESS_TOKEN_JWT_SECRET,
+		) as JwtPayload;
+
+		const userId = decoded.userId;
+		const apiKey = await apiKeyModel.findOne({ _id: keyId, userId });
+
+		if (!apiKey) {
+			return res.status(404).json(standardResponse(false, "API key not found"));
+		}
+
+		await apiKey.revoke(reason);
+
+		return res.status(200).json(
+			standardResponse(true, "API key revoked successfully"),
+		);
+	} catch (error) {
+		next(error);
+	}
+};

@@ -1,4 +1,3 @@
-
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import RedisStore, {
 	type RedisReply,
@@ -39,8 +38,8 @@ const rateLimitHandler = (req: Request, res: Response) => {
 
 // ============ GENERAL API RATE LIMITER ============
 export const apiRateLimiter = rateLimit({
-	windowMs: constants.GENERAL_RL_TIME_WINDOW_MS, // 15 minutes
-	limit: constants.GENERAL_API_RATE_LIMIT_MAX, // 100 requests per 15 min
+	windowMs: constants.GENERAL_API_POINT_RL_TIME_WINDOW_MS, // 15 minutes
+	limit: constants.GENERAL_API_POINT_RATE_LIMIT_MAX, // 100 requests per 15 min
 	standardHeaders: "draft-7",
 	legacyHeaders: false,
 	store: new RedisStore({
@@ -143,8 +142,26 @@ export const apiCreationRL = rateLimit({
 	keyGenerator: (req) => {
 		const email = req.cookies.acToken?.toLowerCase();
 		const ip = ipKeyGenerator((req.ip as string) || "unknown");
-		return email ? `email:${hashEmail(email)}` : `ip:${ip}`;
+		return email ? `token:${hashEmail(email)}` : `ip:${ip}`;
 	},
 	handler: rateLimitHandler,
 	skipFailedRequests: false, // Only count successful API key creations
+});
+
+export const generalApiKeyLimiter = rateLimit({
+	windowMs: constants.GENERAL_APIKEY_RL_TIME_WINDOW_MS, // 15 minutes
+	limit: constants.GENERAL_APIKEY_RATE_LIMIT_MAX, // 100 requests per 15 min
+	standardHeaders: "draft-7",
+	legacyHeaders: false,
+	store: new RedisStore({
+		sendCommand,
+		prefix: REDIS_PREFIXES.RATE_LIMIT_GENERAL_API,
+	}),
+	keyGenerator: (req) => {
+		const email = req.cookies.acToken?.toLowerCase();
+		const ip = ipKeyGenerator((req.ip as string) || "unknown");
+		return email ? `token:${hashEmail(email)}` : `ip:${ip}`;
+	},
+	handler: rateLimitHandler,
+	skipSuccessfulRequests: true, // Only count failed verifications
 });
