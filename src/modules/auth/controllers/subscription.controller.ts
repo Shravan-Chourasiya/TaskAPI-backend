@@ -9,7 +9,10 @@ import {
 	createRazorpayOrder,
 	verifyRazorpaySignature,
 } from "../../../services/razorpay.service.js";
-import { SUBSCRIPTION_PLANS, SUBSCRIPTION_CONSTANTS } from "../../../constants.js";
+import {
+	SUBSCRIPTION_PLANS,
+	SUBSCRIPTION_CONSTANTS,
+} from "../../../constants.js";
 import { SubscriptionModel } from "../models/subscription.schema.js";
 
 const freePlanBuyController = async (
@@ -28,7 +31,7 @@ const freePlanBuyController = async (
 		).id;
 
 		const userSubData = await SubscriptionModel.findById(userId);
-		
+
 		if (userSubData) {
 			// Check if user already has an active subscription
 			const isActiveSubscription =
@@ -45,7 +48,12 @@ const freePlanBuyController = async (
 			}
 
 			// Update existing subscription record instead of creating new one
-			const transactionId = SUBSCRIPTION_CONSTANTS.TRANSACTION_ID_PREFIX + "_" + crypto.randomBytes(SUBSCRIPTION_CONSTANTS.TRANSACTION_ID_BYTES).toString("hex");
+			const transactionId =
+				SUBSCRIPTION_CONSTANTS.TRANSACTION_ID_PREFIX +
+				"_" +
+				crypto
+					.randomBytes(SUBSCRIPTION_CONSTANTS.TRANSACTION_ID_BYTES)
+					.toString("hex");
 			const endDate = new Date();
 			endDate.setMonth(endDate.getMonth() + 12);
 			console.warn(
@@ -77,6 +85,12 @@ const freePlanBuyController = async (
 					},
 				},
 			});
+
+			await userModel.findByIdAndUpdate(userId, {
+				subscriptionType: "Free",
+				subscriptionExpiryDate: endDate,
+			});
+
 			console.warn(
 				"###4::::: Subscription updated for Free plan with transactionId:",
 				transactionId,
@@ -89,7 +103,12 @@ const freePlanBuyController = async (
 			});
 		} else {
 			// Create new subscription record if none exists
-			const transactionId = SUBSCRIPTION_CONSTANTS.TRANSACTION_ID_PREFIX + "_" + crypto.randomBytes(SUBSCRIPTION_CONSTANTS.TRANSACTION_ID_BYTES).toString("hex");
+			const transactionId =
+				SUBSCRIPTION_CONSTANTS.TRANSACTION_ID_PREFIX +
+				"_" +
+				crypto
+					.randomBytes(SUBSCRIPTION_CONSTANTS.TRANSACTION_ID_BYTES)
+					.toString("hex");
 			const subscriptionData = {
 				userId,
 				subscriptionType: subscriptionPlanDetails.planName,
@@ -202,7 +221,12 @@ export const buySubscriptionController = async (
 			});
 		}
 
-		const transactionId = SUBSCRIPTION_CONSTANTS.TRANSACTION_ID_PREFIX + "_" + crypto.randomBytes(SUBSCRIPTION_CONSTANTS.TRANSACTION_ID_BYTES).toString("hex");
+		const transactionId =
+			SUBSCRIPTION_CONSTANTS.TRANSACTION_ID_PREFIX +
+			"_" +
+			crypto
+				.randomBytes(SUBSCRIPTION_CONSTANTS.TRANSACTION_ID_BYTES)
+				.toString("hex");
 		const razorpayOrder = await createRazorpayOrder(
 			subscriptionPlanDetails.price,
 			SUBSCRIPTION_CONSTANTS.CURRENCY,
@@ -306,11 +330,29 @@ export const verifySubscriptionPayment = async (
 	try {
 		const { transactionId, razorPayID, signature, razorPayData } = req.body;
 		console.warn("###1:::::", razorPayData);
-		if (!transactionId || !razorPayID || !signature || !razorPayData) {
+		if (
+			!transactionId ||
+			!razorPayID ||
+			!signature ||
+			!razorPayData ||
+			!req.cookies.acToken
+		) {
 			return res
 				.status(400)
 				.json({ message: "Missing required payment verification fields" });
 		}
+
+		const decoded = jwt.verify(
+			req.cookies.acToken,
+			config.ACCESS_TOKEN_JWT_SECRET,
+		) as JwtPayload;
+
+		const user = await userModel.findById(decoded.id);
+
+		if (!user) {
+			return res.status(404).json({ message: "User not found" });
+		}
+
 		const transactionIdTrimmed =
 			razorPayData.transactionId.split("receipt_")[1]; // Extract the original transactionId without any suffix
 
@@ -342,7 +384,7 @@ export const verifySubscriptionPayment = async (
 
 		// Find the specific transaction instead of assuming index 0
 		const transaction = subscription.transactionHistory.find(
-			(t:any) => t.transactionId === transactionIdTrimmed,
+			(t: any) => t.transactionId === transactionIdTrimmed,
 		);
 		console.warn(
 			"###4::::: Transaction found in subscription history:",
@@ -356,7 +398,12 @@ export const verifySubscriptionPayment = async (
 
 		const endDate = new Date(
 			new Date().getTime() +
-				subscription.subscriptionDurationMonths * SUBSCRIPTION_CONSTANTS.DAYS_PER_MONTH * 24 * 60 * 60 * 1000,
+				subscription.subscriptionDurationMonths *
+					SUBSCRIPTION_CONSTANTS.DAYS_PER_MONTH *
+					24 *
+					60 *
+					60 *
+					1000,
 		);
 
 		subscription.subscriptionStatus = "Active";
@@ -364,13 +411,19 @@ export const verifySubscriptionPayment = async (
 		subscription.subscriptionEndDate = endDate;
 		subscription.paymentStatus = "Completed";
 		subscription.paymentMethod = "upi";
+
 		console.warn("###5::::: Updating subscription with payment details");
 		transaction.razorPayID = razorPayID;
 		transaction.date = new Date();
 		transaction.paymentStatus = "Completed";
 		transaction.paymentMethod = "upi";
-		console.warn("###6::::: Saving updated subscription");
+
+		user.subscriptionType = subscription.subscriptionType;
+		user.subscriptionExpiryDate = endDate;
+
+		await user.save();
 		await subscription.save();
+
 		console.warn("###7::::: Subscription updated and saved successfully");
 		return res.json({
 			success: true,

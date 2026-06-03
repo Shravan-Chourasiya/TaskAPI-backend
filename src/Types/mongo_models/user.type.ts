@@ -5,6 +5,9 @@ export type UserType = {
 	email: string;
 	passwordHash: string;
 	status: "active" | "unverified" | "suspended" | "deleted";
+	subscriptionType: "Free" | "Basic" | "Pro";
+	subscriptionExpiryDate: Date;
+	apiKeyCount: number;
 	isVerified: boolean;
 	verifiedAt: Date;
 	verificationToken: string;
