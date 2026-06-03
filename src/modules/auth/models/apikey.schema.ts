@@ -66,7 +66,7 @@ const apiKeySchema = new mongoose.Schema(
 		},
 
 		// Status Fields
-		status: {
+		keyStatus: {
 			type: String,
 			enum: ["active", "revoked", "expired", "blacklisted"],
 			default: "active",
@@ -142,10 +142,10 @@ const apiKeySchema = new mongoose.Schema(
 );
 
 // ============ INDEXES ============
-apiKeySchema.index({ userId: 1, status: 1 });
+apiKeySchema.index({ userId: 1, keyStatus: 1 });
 apiKeySchema.index({ userId: 1, isRevoked: 1, isBlacklisted: 1 });
-apiKeySchema.index({ keyHash: 1, status: 1 });
-apiKeySchema.index({ subscriptionType: 1, status: 1 });
+apiKeySchema.index({ keyHash: 1, keyStatus: 1 });
+apiKeySchema.index({ subscriptionType: 1, keyStatus: 1 });
 apiKeySchema.index({ expiresAt: 1 }, { sparse: true });
 apiKeySchema.index({ lastUsedAt: 1 });
 
@@ -154,7 +154,7 @@ apiKeySchema.index(
 	{ expiresAt: 1 },
 	{
 		expireAfterSeconds: 0,
-		partialFilterExpression: { status: "expired" },
+		partialFilterExpression: { keyStatus: "expired" },
 	},
 );
 
@@ -164,7 +164,7 @@ apiKeySchema.virtual("isExpired").get(function () {
 });
 
 apiKeySchema.virtual("isActive").get(function () {
-	return this.status === "active" && !this.isRevoked && !this.isBlacklisted;
+	return this.keyStatus === "active" && !this.isRevoked && !this.isBlacklisted;
 });
 
 apiKeySchema.virtual("daysUntilExpiry").get(function () {
@@ -177,21 +177,21 @@ apiKeySchema.virtual("daysUntilExpiry").get(function () {
 // ============ MIDDLEWARE ============
 apiKeySchema.pre("save", function () {
 	if (this.isModified("isRevoked") && this.isRevoked) {
-		this.status = "revoked";
+		this.keyStatus = "revoked";
 		if (!this.revokedAt) {
 			this.revokedAt = new Date();
 		}
 	}
 
 	if (this.isModified("isBlacklisted") && this.isBlacklisted) {
-		this.status = "blacklisted";
+		this.keyStatus = "blacklisted";
 		if (!this.blacklistedAt) {
 			this.blacklistedAt = new Date();
 		}
 	}
 
 	if (this.expiresAt && new Date() > this.expiresAt) {
-		this.status = "expired";
+		this.keyStatus = "expired";
 	}
 });
 
@@ -209,7 +209,7 @@ apiKeySchema.pre("save", async function () {
 // ============ INSTANCE METHODS ============
 apiKeySchema.methods.revoke = async function (reason?: string): Promise<void> {
 	this.isRevoked = true;
-	this.status = "revoked";
+	this.keyStatus = "revoked";
 	this.revokedAt = new Date();
 	if (reason) {
 		this.revokedReason = reason;
@@ -221,7 +221,7 @@ apiKeySchema.methods.blacklist = async function (
 	reason?: string,
 ): Promise<void> {
 	this.isBlacklisted = true;
-	this.status = "blacklisted";
+	this.keyStatus = "blacklisted";
 	this.blacklistedAt = new Date();
 	if (reason) {
 		this.blacklistedReason = reason;
@@ -254,7 +254,7 @@ apiKeySchema.methods.isIPAllowed = function (ip: string): boolean {
 apiKeySchema.statics.findActiveKeys = function (userId: string) {
 	return this.find({
 		userId,
-		status: "active",
+		keyStatus: "active",
 		isRevoked: false,
 		isBlacklisted: false,
 	});
@@ -268,7 +268,7 @@ apiKeySchema.statics.revokeAllUserKeys = async function (
 		{ userId, isRevoked: false },
 		{
 			isRevoked: true,
-			status: "revoked",
+			keyStatus: "revoked",
 			revokedAt: new Date(),
 			revokedReason: reason,
 		},

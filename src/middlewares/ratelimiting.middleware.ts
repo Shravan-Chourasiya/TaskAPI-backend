@@ -1,31 +1,3 @@
-// import rateLimit, { ipKeyGenerator } from "express-rate-limit";
-// import type { Request } from "express";
-
-// type RequestWithUser = Request & {
-// 	userID?: string;
-// };
-
-// export const rateLimitMiddleware = rateLimit({
-// 	windowMs: 10 * 60 * 1000, // 10 minutes
-// 	limit: 50,
-// 	standardHeaders: "draft-7",
-// 	legacyHeaders: false,
-// 	keyGenerator: (req: RequestWithUser) => {
-// 		const userID = req.userID;
-// 		const ipKey = ipKeyGenerator(req.ip as string);
-// 		return userID ? `${userID}-${ipKey}` : ipKey;
-// 	},
-// });
-
-// export const otpRateLimiter = rateLimit({
-// 	windowMs: 5 * 60 * 1000,
-// 	max: 3,
-// 	message: "Too many OTP attempts. Try again after 10 minutes.",
-// 	keyGenerator: (req) => {
-// 		const email = req.body.email || req.cookies.tempToken;
-// 		return email || ipKeyGenerator(req.ip || ""); // Fallback to IP
-// 	},
-// });
 
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import RedisStore, {
@@ -157,4 +129,22 @@ export const profileUpdateLimiter = rateLimit({
 	},
 	handler: rateLimitHandler,
 	skipFailedRequests: true, // Only count successful profile updates
+});
+
+export const apiCreationRL = rateLimit({
+	windowMs: constants.APIKEY_CREATION_RL_TIME_WINDOW_MS, // 2 minutes
+	limit: constants.APIKEY_CREATION_RATE_LIMIT_MAX, // 1 API key creation request per 2 min
+	standardHeaders: "draft-7",
+	legacyHeaders: false,
+	store: new RedisStore({
+		sendCommand,
+		prefix: REDIS_PREFIXES.RATE_LIMIT_API,
+	}),
+	keyGenerator: (req) => {
+		const email = req.cookies.acToken?.toLowerCase();
+		const ip = ipKeyGenerator((req.ip as string) || "unknown");
+		return email ? `email:${hashEmail(email)}` : `ip:${ip}`;
+	},
+	handler: rateLimitHandler,
+	skipFailedRequests: false, // Only count successful API key creations
 });

@@ -9,7 +9,7 @@ export type ApiKeyType = {
 	keyHint: string;
 	subscriptionType: "Free" | "Basic" | "Pro";
 	scopes: string[];
-	status: "active" | "revoked" | "expired" | "blacklisted";
+	keyStatus: "active" | "revoked" | "expired" | "blacklisted";
 	isRevoked: boolean;
 	revokedAt?: Date;
 	revokedReason?: string;
