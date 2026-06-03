@@ -1,0 +1,122 @@
+import { NextFunction, Request, Response } from "express";
+import { JwtPayload } from "jsonwebtoken";
+import jwt from "jsonwebtoken";
+import { config } from "../../../configs/app.config.js";
+import { apiKeyCreationSchema } from "../../../libs/zod/apikey.zodschema.js";
+import userModel from "../models/user.schema.js";
+import * as z from "zod";
+import { apiKeyModel } from "../models/apikey.schema.js";
+import crypto from "crypto";
+import { standardResponse } from "../../../utils/apiResponse.utils.js";
+
+export const createApiKey = async (
+	req: Request,
+	res: Response,
+	next: NextFunction,
+) => {
+	try {
+		const {
+			name,
+			description,
+			env,
+			scopes,
+			allowedIPs,
+		}: z.infer<typeof apiKeyCreationSchema> = req.body;
+		if (
+			!name ||
+			!scopes ||
+			!allowedIPs ||
+			!env ||
+			!scopes ||
+			!req.cookies.acToken
+		) {
+			return res
+				.status(400)
+				.json(standardResponse(false, "Missing required fields"));
+		}
+
+		const decoded = jwt.verify(
+			req.cookies.acToken,
+			config.ACCESS_TOKEN_JWT_SECRET,
+		) as JwtPayload;
+
+		const userId = decoded.userId;
+		const user = await userModel.findById(userId);
+
+		if (!user) {
+			return res.status(404).json(standardResponse(false, "User not found"));
+		}
+		if (
+			user.subscriptionExpiryDate &&
+			new Date() > user.subscriptionExpiryDate
+		) {
+			return res
+				.status(403)
+				.json(
+					standardResponse(
+						false,
+						"User subscription has expired, cannot create new API keys",
+					),
+				);
+		}
+
+		if (user.subscriptionType === "Free" && user.apiKeyCount >= 5) {
+			return res
+				.status(400)
+				.json(standardResponse(false, "Free users can only create 5 API keys"));
+		}
+		if (user.subscriptionType === "Basic" && user.apiKeyCount >= 10) {
+			return res
+				.status(400)
+				.json(
+					standardResponse(false, "Basic users can only create 10 API keys"),
+				);
+		}
+		if (user.subscriptionType === "Pro" && user.apiKeyCount >= 25) {
+			return res
+				.status(400)
+				.json(standardResponse(false, "Pro users can only create 25 API keys"));
+		}
+
+		if (
+			user.isBlackListed ||
+			user.isDeleted ||
+			!user.isVerified ||
+			user.status !== "active"
+		) {
+			return res
+				.status(403)
+				.json(
+					standardResponse(false, "User is forbidden from creating API keys"),
+				);
+		}
+		const apiKeyValue = `tk_${env}_${crypto.randomBytes(16).toString("hex")}`;
+
+		const apiKey = await apiKeyModel.create({
+			userId,
+			name,
+			description,
+			keyHash: apiKeyValue,
+			subscriptionType: user.subscriptionType,
+			scopes,
+			keyStatus: "active",
+			allowedIPs,
+			environment: env,
+			expiresAt: user.subscriptionExpiryDate,
+		});
+
+		user.apiKeyCount = (user.apiKeyCount || 0) + 1;
+		await user.save();
+
+		return res.status(201).json(
+			standardResponse(true, "API key created successfully", {
+				apiKey: apiKeyValue,
+				apiKeyId: apiKey._id,
+				apiKeyPrefix: apiKey.keyPrefix,
+				apiKeyCreatorId: apiKey.userId,
+			}),
+		);
+	} catch (error) {
+		next(error);
+	}
+};
