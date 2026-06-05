@@ -8,7 +8,7 @@ import { authRouter } from "./routes/auth.routes.js";
 import { apiRateLimiter } from "./middlewares/ratelimiting.middleware.js";
 import { subscriptionRouter } from "./routes/subscription.routes.js";
 import { generalRouter } from "./routes/general.routes.js";
-
+import { apiKeyRouter } from "./routes/apikey.routes.js";
 
 const app = express();
 
@@ -28,6 +28,7 @@ app.use(cors(corsOptions));
 app.use("/api/v1/auth", apiRateLimiter, authRouter);
 app.use("/api/v1/",apiRateLimiter, generalRouter);
 app.use("/api/v1/subscription",apiRateLimiter, subscriptionRouter);
+app.use('/api/v1/api-keys', apiRateLimiter, apiKeyRouter);
 
 
 export { app };
