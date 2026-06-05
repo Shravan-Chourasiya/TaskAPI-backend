@@ -14,6 +14,7 @@ import {
 	SUBSCRIPTION_CONSTANTS,
 } from "../../../constants.js";
 import { SubscriptionModel } from "../models/subscription.schema.js";
+import { standardResponse } from "../../../utils/apiResponse.utils.js";
 
 const freePlanBuyController = async (
 	req: Request,
@@ -38,13 +39,12 @@ const freePlanBuyController = async (
 				userSubData.subscriptionStatus === "Active" &&
 				new Date() < userSubData.subscriptionEndDate;
 
+			const errMsg =
+				userSubData.subscriptionType === "Free"
+					? "You already have an active Free subscription"
+					: "You already have an active paid subscription. Cannot downgrade to Free while active.";
 			if (isActiveSubscription) {
-				return res.status(400).json({
-					message:
-						userSubData.subscriptionType === "Free"
-							? "You already have an active Free subscription"
-							: "You already have an active paid subscription. Cannot downgrade to Free while active.",
-				});
+				return res.status(400).json(standardResponse(false, errMsg));
 			}
 
 			// Update existing subscription record instead of creating new one
@@ -97,10 +97,7 @@ const freePlanBuyController = async (
 			);
 			const updatedSubscription = await SubscriptionModel.findOne({ userId });
 
-			return res.status(200).json({
-				message: "Free subscription activated successfully",
-				subscription: updatedSubscription,
-			});
+			return res.status(200).json(standardResponse(true, "Free subscription activated successfully", updatedSubscription));
 		} else {
 			// Create new subscription record if none exists
 			const transactionId =
@@ -126,13 +123,9 @@ const freePlanBuyController = async (
 			if (!newSubscription) {
 				return res
 					.status(500)
-					.json({ success: false, message: "Failed to create subscription" });
+					.json(standardResponse(false, "Failed to create subscription"));
 			}
-			return res.status(201).json({
-				success: true,
-				message: "Free subscription activated successfully",
-				subscription: newSubscription,
-			});
+			return res.status(201).json(standardResponse(true, "Free subscription activated successfully", newSubscription));
 		}
 	} catch (error) {
 		next(error);
@@ -157,7 +150,7 @@ export const buySubscriptionController = async (
 
 		const userData = await userModel.findById(userId);
 		if (!userData) {
-			return res.status(404).json({ message: "User not found" });
+			return res.status(404).json(standardResponse(false, "User not found"));
 		}
 		const isPlanFree = subscriptionPlanDetails.planName === "Free";
 
@@ -176,27 +169,18 @@ export const buySubscriptionController = async (
 			planNameFromDb === subscriptionPlanDetails.planName &&
 			existingSubscription?.subscriptionStatus === "Active"
 		) {
-			return res.status(400).json({
-				success: false,
-				message: "You already have this subscription plan",
-			});
+			return res.status(400).json(standardResponse(false, "You already have this subscription plan active"));
 		}
 
 		if (!SUBSCRIPTION_PLANS[subscriptionPlanDetails.planName]) {
-			return res.status(400).json({
-				success: false,
-				message: "Invalid subscription plan",
-			});
+			return res.status(400).json(standardResponse(false, "Invalid subscription plan"));
 		}
 
 		if (
 			SUBSCRIPTION_PLANS[subscriptionPlanDetails.planName].price !==
 			subscriptionPlanDetails.price
 		) {
-			return res.status(400).json({
-				success: false,
-				message: "Price mismatch for the selected subscription plan",
-			});
+			return res.status(400).json(standardResponse(false, "Price mismatch for the selected subscription plan"));
 		}
 
 		const isActive =
@@ -213,12 +197,7 @@ export const buySubscriptionController = async (
 
 		// Block if active and not upgrading
 		if (isActive && !isUpgrade) {
-			return res.status(400).json({
-				success: false,
-				message: isSamePlan
-					? "You already have an active subscription for this plan"
-					: "Cannot downgrade while subscription is active",
-			});
+			return res.status(400).json(standardResponse(false, isSamePlan ? "You already have an active subscription for this plan" : "Cannot downgrade while subscription is active"));
 		}
 
 		const transactionId =
@@ -236,7 +215,7 @@ export const buySubscriptionController = async (
 		if (!razorpayOrder) {
 			return res
 				.status(500)
-				.json({ message: "Failed to create Razorpay order" });
+				.json(standardResponse(false, "Failed to create Razorpay order"));
 		}
 		if (existingSubscription && razorpayOrder) {
 			const updatedSubscriptionData = await existingSubscription.updateOne({
@@ -262,14 +241,9 @@ export const buySubscriptionController = async (
 			if (!updatedSubscriptionData) {
 				return res
 					.status(500)
-					.json({ success: false, message: "Failed to create subscription" });
+					.json(standardResponse(false, "Failed to create subscription"));
 			}
-			return res.status(200).json({
-				success: true,
-				message: "Subscription updated successfully",
-				data: updatedSubscriptionData,
-				razorpayOrder,
-			});
+			return res.status(200).json(standardResponse(true, "Subscription updated successfully", { updatedSubscriptionData, razorpayOrder }));
 		} else {
 			const newSubscription = await SubscriptionModel.create({
 				userId,
@@ -295,15 +269,10 @@ export const buySubscriptionController = async (
 				// await Session.abortTransaction();
 				return res
 					.status(500)
-					.json({ success: false, message: "Failed to create subscription" });
+					.json(standardResponse(false, "Failed to create subscription"));
 			}
 			// await Session.commitTransaction();
-			return res.status(201).json({
-				success: true,
-				message: "Subscription purchased successfully",
-				subscription: newSubscription,
-				razorpayOrder,
-			});
+			return res.status(201).json(standardResponse(true, "Subscription purchased successfully", { subscription: newSubscription, razorpayOrder }));
 		}
 	} catch (error) {
 		// 	await Session.abortTransaction();
@@ -350,7 +319,7 @@ export const verifySubscriptionPayment = async (
 		const user = await userModel.findById(decoded.id);
 
 		if (!user) {
-			return res.status(404).json({ message: "User not found" });
+			return res.status(404).json(standardResponse(false, "User not found"));
 		}
 
 		const transactionIdTrimmed =
@@ -367,7 +336,7 @@ export const verifySubscriptionPayment = async (
 			signature,
 		);
 		if (!isValid) {
-			return res.status(400).json({ message: "Invalid payment signature" });
+			return res.status(400).json(standardResponse(false, "Invalid payment signature"));
 		}
 
 		// Update subscription to Active
@@ -379,7 +348,7 @@ export const verifySubscriptionPayment = async (
 			subscription,
 		);
 		if (!subscription) {
-			return res.status(404).json({ message: "Subscription not found" });
+			return res.status(404).json(standardResponse(false, "Subscription not found"));
 		}
 
 		// Find the specific transaction instead of assuming index 0
@@ -393,7 +362,7 @@ export const verifySubscriptionPayment = async (
 		if (!transaction) {
 			return res
 				.status(404)
-				.json({ message: "Transaction not found in subscription history" });
+				.json(standardResponse(false, "Transaction not found in subscription history"));
 		}
 
 		const endDate = new Date(
@@ -425,10 +394,7 @@ export const verifySubscriptionPayment = async (
 		await subscription.save();
 
 		console.warn("###7::::: Subscription updated and saved successfully");
-		return res.json({
-			success: true,
-			message: "Payment verified successfully",
-		});
+		return res.json(standardResponse(true, "Payment verified successfully"));
 	} catch (error) {
 		next(error);
 	}
@@ -442,9 +408,11 @@ export const razorpayWebhookHandler = async (
 	try {
 		const secret = req.body.secret;
 		if (!secret) {
-			return res.status(401).json({ message: "Unauthorized" });
+			return res
+				.status(401)
+				.json(standardResponse(false, "Unauthorized: Missing webhook secret"));
 		}
-		return res.status(200).json({ message: "Webhook received" });
+		return res.status(200).json(standardResponse(true, "Webhook received"));
 	} catch (error) {
 		next(error);
 	}

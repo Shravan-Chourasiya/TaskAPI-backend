@@ -40,15 +40,17 @@ export const createApiKey = async (
 			config.ACCESS_TOKEN_JWT_SECRET,
 		) as JwtPayload;
 
-		const userId = decoded.userId;
+		const userId = decoded.id;
+		console.log("#####1:Decoded JWT payload:", decoded, userId);
 		const user = await userModel.findById(userId);
 
 		if (!user) {
 			return res.status(404).json(standardResponse(false, "User not found"));
 		}
 		if (
-			user.subscriptionExpiryDate &&
-			new Date() > user.subscriptionExpiryDate
+			(user.subscriptionExpiryDate &&
+				new Date() > user.subscriptionExpiryDate) ||
+			!user.subscriptionType
 		) {
 			return res
 				.status(403)
@@ -59,7 +61,9 @@ export const createApiKey = async (
 					),
 				);
 		}
-
+		console.log(
+			`#####2: User subscription type: ${user.subscriptionType}, API key count: ${user.apiKeyCount} #####`,
+		);
 		if (user.subscriptionType === "Free" && user.apiKeyCount >= 5) {
 			return res
 				.status(400)
@@ -92,6 +96,11 @@ export const createApiKey = async (
 		}
 		const apiKeyValue = `tk_${env}_${crypto.randomBytes(16).toString("hex")}`;
 
+		console.log(
+			"#####3: User passed all checks, proceeding to create API key with value:",
+			apiKeyValue,
+		);
+
 		const apiKey = await apiKeyModel.create({
 			userId,
 			name,
@@ -107,7 +116,10 @@ export const createApiKey = async (
 
 		user.apiKeyCount = (user.apiKeyCount || 0) + 1;
 		await user.save();
-
+		console.log(
+			"#####4: API key created successfully with value:",
+			apiKeyValue,
+		);
 		return res.status(201).json(
 			standardResponse(true, "API key created successfully", {
 				apiKey: apiKeyValue,
@@ -128,9 +140,7 @@ export const listApiKeys = async (
 ) => {
 	try {
 		if (!req.cookies.acToken) {
-			return res
-				.status(401)
-				.json(standardResponse(false, "Unauthorized"));
+			return res.status(401).json(standardResponse(false, "Unauthorized"));
 		}
 
 		const decoded = jwt.verify(
@@ -139,11 +149,14 @@ export const listApiKeys = async (
 		) as JwtPayload;
 
 		const userId = decoded.userId;
-		const apiKeys = await apiKeyModel.find({ userId }).select('-keyHash').sort({ createdAt: -1 });
+		const apiKeys = await apiKeyModel
+			.find({ userId })
+			.select("-keyHash")
+			.sort({ createdAt: -1 });
 
-		return res.status(200).json(
-			standardResponse(true, "API keys fetched successfully", apiKeys),
-		);
+		return res
+			.status(200)
+			.json(standardResponse(true, "API keys fetched successfully", apiKeys));
 	} catch (error) {
 		next(error);
 	}
@@ -157,15 +170,15 @@ export const revokeApiKey = async (
 	try {
 		const { keyId } = req.params;
 		const { reason } = req.body;
-        
-        if(reason && typeof reason !== "string"){
-            return res.status(400).json(standardResponse(false,"Reason must be a string"))
-        }
+
+		if (reason && typeof reason !== "string") {
+			return res
+				.status(400)
+				.json(standardResponse(false, "Reason must be a string"));
+		}
 
 		if (!req.cookies.acToken) {
-			return res
-				.status(401)
-				.json(standardResponse(false, "Unauthorized"));
+			return res.status(401).json(standardResponse(false, "Unauthorized"));
 		}
 
 		const decoded = jwt.verify(
@@ -182,9 +195,9 @@ export const revokeApiKey = async (
 
 		await apiKey.revoke(reason);
 
-		return res.status(200).json(
-			standardResponse(true, "API key revoked successfully"),
-		);
+		return res
+			.status(200)
+			.json(standardResponse(true, "API key revoked successfully"));
 	} catch (error) {
 		next(error);
 	}

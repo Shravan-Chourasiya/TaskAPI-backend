@@ -96,13 +96,11 @@ const apiKeySchema = new mongoose.Schema(
 		// Expiry
 		expiresAt: {
 			type: Date,
-			index: true,
 		},
 
 		// Usage Tracking
 		lastUsedAt: {
 			type: Date,
-			index: true,
 		},
 
 		usageCount: {
@@ -146,10 +144,9 @@ apiKeySchema.index({ userId: 1, keyStatus: 1 });
 apiKeySchema.index({ userId: 1, isRevoked: 1, isBlacklisted: 1 });
 apiKeySchema.index({ keyHash: 1, keyStatus: 1 });
 apiKeySchema.index({ subscriptionType: 1, keyStatus: 1 });
-apiKeySchema.index({ expiresAt: 1 }, { sparse: true });
 apiKeySchema.index({ lastUsedAt: 1 });
 
-// TTL Index for expired keys
+// TTL Index for expired keys (also serves as sparse index on expiresAt)
 apiKeySchema.index(
 	{ expiresAt: 1 },
 	{
