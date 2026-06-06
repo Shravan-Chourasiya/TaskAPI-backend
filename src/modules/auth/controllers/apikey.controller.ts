@@ -106,6 +106,8 @@ export const createApiKey = async (
 			name,
 			description,
 			keyHash: apiKeyValue,
+			keyPrefix: apiKeyValue.slice(0, 8),
+			keyHint:apiKeyValue.slice(-4),
 			subscriptionType: user.subscriptionType,
 			scopes,
 			keyStatus: "active",
