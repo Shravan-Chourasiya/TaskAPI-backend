@@ -140,9 +140,9 @@ export const apiCreationRL = rateLimit({
 		prefix: REDIS_PREFIXES.RATE_LIMIT_API,
 	}),
 	keyGenerator: (req) => {
-		const email = req.cookies.acToken?.toLowerCase();
+		const userID = req.cookies.acToken?.toLowerCase();
 		const ip = ipKeyGenerator((req.ip as string) || "unknown");
-		return email ? `token:${hashEmail(email)}` : `ip:${ip}`;
+		return userID ? `token:${hashEmail(userID)}` : `ip:${ip}`;
 	},
 	handler: rateLimitHandler,
 	skipFailedRequests: false, // Only count successful API key creations
@@ -158,9 +158,27 @@ export const generalApiKeyLimiter = rateLimit({
 		prefix: REDIS_PREFIXES.RATE_LIMIT_GENERAL_API,
 	}),
 	keyGenerator: (req) => {
-		const email = req.cookies.acToken?.toLowerCase();
+		const userID = req.cookies.acToken?.toLowerCase();
 		const ip = ipKeyGenerator((req.ip as string) || "unknown");
-		return email ? `token:${hashEmail(email)}` : `ip:${ip}`;
+		return userID ? `token:${hashEmail(userID)}` : `ip:${ip}`;
+	},
+	handler: rateLimitHandler,
+	skipSuccessfulRequests: true, // Only count failed verifications
+});
+
+export const apiKeyUpdateLimiter = rateLimit({
+	windowMs: constants.APIKEY_UPDATE_RL_TIME_WINDOW_MS, // 15 minutes
+	limit: constants.APIKEY_UPDATE_RATE_LIMIT_MAX, // 100 requests per 15 min
+	standardHeaders: "draft-7",
+	legacyHeaders: false,
+	store: new RedisStore({
+		sendCommand,
+		prefix: REDIS_PREFIXES.RATE_LIMIT_API_UPDATE,
+	}),
+	keyGenerator: (req) => {
+		const userID = req.cookies.acToken?.toLowerCase();
+		const ip = ipKeyGenerator((req.ip as string) || "unknown");
+		return userID ? `token:${hashEmail(userID)}` : `ip:${ip}`;
 	},
 	handler: rateLimitHandler,
 	skipSuccessfulRequests: true, // Only count failed verifications
