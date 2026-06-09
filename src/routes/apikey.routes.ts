@@ -1,6 +1,10 @@
-import { apiKeyCreationSchema } from "../libs/zod/apikey.zodschema.js";
+import {
+	apiKeyCreationSchema,
+	updateApiKeySchema,
+} from "../libs/zod/apikey.zodschema.js";
 import {
 	apiCreationRL,
+	apiKeyUpdateLimiter,
 	generalApiKeyLimiter,
 } from "../middlewares/ratelimiting.middleware.js";
 import { ZodValidatorMiddleware } from "../middlewares/zodvalidation.middleware.js";
@@ -13,15 +17,50 @@ router.post(
 	"/create/apikey",
 	apiCreationRL,
 	ZodValidatorMiddleware(apiKeyCreationSchema),
-	apiKeyController.createApiKey,
+	apiKeyController.createApiKeyController,
 );
 
-router.get("/list/apikeys", generalApiKeyLimiter, apiKeyController.listApiKeys);
+router.get(
+	"/list/apikeys",
+	generalApiKeyLimiter,
+	apiKeyController.listApiKeysController,
+);
 
 router.post(
 	"/revoke/apikey/:keyId",
 	generalApiKeyLimiter,
-	apiKeyController.revokeApiKey,
+	apiKeyController.revokeApiKeyController,
 );
 
-export { router as apiKeyRouter } ;
+router.patch(
+	"/update",
+	apiKeyUpdateLimiter,
+	ZodValidatorMiddleware(updateApiKeySchema),
+	apiKeyController.updateApiKeyController,
+);
+router.patch(
+	"/update/name",
+	apiKeyUpdateLimiter,
+	ZodValidatorMiddleware(updateApiKeySchema),
+	apiKeyController.updateApiKeyNameController,
+);
+router.patch(
+	"/update/scopes",
+	apiKeyUpdateLimiter,
+	ZodValidatorMiddleware(updateApiKeySchema),
+	apiKeyController.updateApiKeyScopesController,
+);
+router.patch(
+	"/update/ips",
+	apiKeyUpdateLimiter,
+	ZodValidatorMiddleware(updateApiKeySchema),
+	apiKeyController.updateApiKeyIPWhiteListController,
+);
+
+router.delete(
+	"/delete/:keyId",
+	generalApiKeyLimiter,
+	apiKeyController.deleteApiKeyController,
+);
+
+export { router as apiKeyRouter };

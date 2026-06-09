@@ -2,14 +2,21 @@ import { NextFunction, Request, Response } from "express";
 import { JwtPayload } from "jsonwebtoken";
 import jwt from "jsonwebtoken";
 import { config } from "../../../configs/app.config.js";
-import { apiKeyCreationSchema } from "../../../libs/zod/apikey.zodschema.js";
+import {
+	apiKeyCreationSchema,
+	updateApiIPWhiteListSchema,
+	updateApiKeySchema,
+	updateApiNameSchema,
+	updateApiScopesSchema,
+} from "../../../libs/zod/apikey.zodschema.js";
 import userModel from "../models/user.schema.js";
 import * as z from "zod";
 import { apiKeyModel } from "../models/apikey.schema.js";
 import crypto from "crypto";
 import { standardResponse } from "../../../utils/apiResponse.utils.js";
+import mongoose from "mongoose";
 
-export const createApiKey = async (
+export const createApiKeyController = async (
 	req: Request,
 	res: Response,
 	next: NextFunction,
@@ -107,7 +114,7 @@ export const createApiKey = async (
 			description,
 			keyHash: apiKeyValue,
 			keyPrefix: apiKeyValue.slice(0, 8),
-			keyHint:apiKeyValue.slice(-4),
+			keyHint: apiKeyValue.slice(-4),
 			subscriptionType: user.subscriptionType,
 			scopes,
 			keyStatus: "active",
@@ -135,7 +142,7 @@ export const createApiKey = async (
 	}
 };
 
-export const listApiKeys = async (
+export const listApiKeysController = async (
 	req: Request,
 	res: Response,
 	next: NextFunction,
@@ -150,11 +157,12 @@ export const listApiKeys = async (
 			config.ACCESS_TOKEN_JWT_SECRET,
 		) as JwtPayload;
 
-		const userId = decoded.userId;
+		const userId = decoded.id;
 		const apiKeys = await apiKeyModel
 			.find({ userId })
 			.select("-keyHash")
-			.sort({ createdAt: -1 });
+			.sort({ createdAt: -1 })
+			.lean();
 
 		return res
 			.status(200)
@@ -164,7 +172,7 @@ export const listApiKeys = async (
 	}
 };
 
-export const revokeApiKey = async (
+export const revokeApiKeyController = async (
 	req: Request,
 	res: Response,
 	next: NextFunction,
@@ -188,7 +196,7 @@ export const revokeApiKey = async (
 			config.ACCESS_TOKEN_JWT_SECRET,
 		) as JwtPayload;
 
-		const userId = decoded.userId;
+		const userId = decoded.id;
 		const apiKey = await apiKeyModel.findOne({ _id: keyId, userId });
 
 		if (!apiKey) {
@@ -200,6 +208,237 @@ export const revokeApiKey = async (
 		return res
 			.status(200)
 			.json(standardResponse(true, "API key revoked successfully"));
+	} catch (error) {
+		next(error);
+	}
+};
+
+export const deleteApiKeyController = async (
+	req: Request,
+	res: Response,
+	next: NextFunction,
+) => {
+	try {
+		const { keyId } = req.params;
+		if (!keyId || !(typeof keyId === "string")) {
+			return res.status(400).json(standardResponse(false, "keyId is required"));
+		}
+
+		if (!req.cookies.acToken) {
+			return res.status(401).json(standardResponse(false, "Unauthorized"));
+		}
+
+		const decoded = jwt.verify(
+			req.cookies.acToken,
+			config.ACCESS_TOKEN_JWT_SECRET,
+		) as JwtPayload;
+
+		const userId = decoded.id;
+
+		const apiKey = await apiKeyModel
+			.findOneAndDelete({ _id: keyId, userId })
+			.lean();
+
+		if (!apiKey) {
+			return res.status(404).json(standardResponse(false, "API key not found"));
+		}
+		return res
+			.status(200)
+			.json(standardResponse(true, "API key deleted successfully", apiKey));
+	} catch (error) {
+		next(error);
+	}
+};
+
+export const updateApiKeyController = async (
+	req: Request,
+	res: Response,
+	next: NextFunction,
+) => {
+	try {
+		const { keyId, keyUpdatesDetails }: z.infer<typeof updateApiKeySchema> =
+			req.body;
+		if (!keyId || !keyUpdatesDetails) {
+			return res
+				.status(400)
+				.json(
+					standardResponse(false, "keyId and keyUpdatesDetails are required"),
+				);
+		}
+		if (!mongoose.Types.ObjectId.isValid(keyId)) {
+			return res
+				.status(400)
+				.json(standardResponse(false, "Invalid keyId format"));
+		}
+
+		if (!req.cookies.acToken) {
+			return res.status(401).json(standardResponse(false, "Unauthorized"));
+		}
+		const decoded = jwt.verify(
+			req.cookies.acToken,
+			config.ACCESS_TOKEN_JWT_SECRET,
+		) as JwtPayload;
+
+		const userId = decoded.id;
+
+		const apiKey = await apiKeyModel
+			.findOneAndUpdate(
+				{ _id: keyId, userId },
+				{ $set: keyUpdatesDetails },
+				{ new: true, runValidators: true },
+			)
+			.lean();
+
+		if (!apiKey) {
+			return res.status(404).json(standardResponse(false, "API key not found"));
+		}
+
+		return res
+			.status(200)
+			.json(standardResponse(true, "API key updated successfully", apiKey));
+	} catch (error) {
+		next(error);
+	}
+};
+
+export const updateApiKeyNameController = async (
+	req: Request,
+	res: Response,
+	next: NextFunction,
+) => {
+	try {
+		const { keyId, newName }: z.infer<typeof updateApiNameSchema> = req.body;
+		if (!keyId || !newName) {
+			return res
+				.status(400)
+				.json(standardResponse(false, "keyId and newName are required"));
+		}
+		if (!mongoose.Types.ObjectId.isValid(keyId)) {
+			return res
+				.status(400)
+				.json(standardResponse(false, "Invalid keyId format"));
+		}
+
+		if (!req.cookies.acToken) {
+			return res.status(401).json(standardResponse(false, "Unauthorized"));
+		}
+
+		const decoded = jwt.verify(
+			req.cookies.acToken,
+			config.ACCESS_TOKEN_JWT_SECRET,
+		) as JwtPayload;
+		const apikey = await apiKeyModel
+			.findOneAndUpdate(
+				{ _id: keyId, userId: decoded.id },
+				{ $set: { name: newName } },
+				{ new: true, runValidators: true },
+			)
+			.lean();
+		if (!apikey) {
+			return res.status(404).json(standardResponse(false, "API key not found"));
+		}
+		return res.status(200).json(
+			standardResponse(true, "API key name updated successfully", {
+				updateStatus: "success",
+				apikey,
+			}),
+		);
+	} catch (error) {
+		next(error);
+	}
+};
+
+export const updateApiKeyScopesController = async (
+	req: Request,
+	res: Response,
+	next: NextFunction,
+) => {
+	try {
+		const { keyId, newScopes }: z.infer<typeof updateApiScopesSchema> =
+			req.body;
+		if (!keyId || !newScopes) {
+			return res
+				.status(400)
+				.json(standardResponse(false, "keyId and newScopes are required"));
+		}
+		if (!mongoose.Types.ObjectId.isValid(keyId)) {
+			return res
+				.status(400)
+				.json(standardResponse(false, "Invalid keyId format"));
+		}
+
+		if (!req.cookies.acToken) {
+			return res.status(401).json(standardResponse(false, "Unauthorized"));
+		}
+
+		const decoded = jwt.verify(
+			req.cookies.acToken,
+			config.ACCESS_TOKEN_JWT_SECRET,
+		) as JwtPayload;
+		const apikey = await apiKeyModel
+			.findOneAndUpdate(
+				{ _id: keyId, userId: decoded.id },
+				{ $set: { scopes: newScopes } },
+				{ new: true, runValidators: true },
+			)
+			.lean();
+		if (!apikey) {
+			return res.status(404).json(standardResponse(false, "API key not found"));
+		}
+		return res.status(200).json(
+			standardResponse(true, "API key scopes updated successfully", {
+				updateStatus: "success",
+				apikey,
+			}),
+		);
+	} catch (error) {
+		next(error);
+	}
+};
+
+export const updateApiKeyIPWhiteListController = async (
+	req: Request,
+	res: Response,
+	next: NextFunction,
+) => {
+	try {
+		const { keyId, newIPs }: z.infer<typeof updateApiIPWhiteListSchema> =
+			req.body;
+		if (!keyId || !newIPs) {
+			return res
+				.status(400)
+				.json(standardResponse(false, "keyId and newIPs are required"));
+		}
+		if (!mongoose.Types.ObjectId.isValid(keyId)) {
+			return res
+				.status(400)
+				.json(standardResponse(false, "Invalid keyId format"));
+		}
+
+		if (!req.cookies.acToken) {
+			return res.status(401).json(standardResponse(false, "Unauthorized"));
+		}
+
+		const decoded = jwt.verify(
+			req.cookies.acToken,
+			config.ACCESS_TOKEN_JWT_SECRET,
+		) as JwtPayload;
+		const apikey = await apiKeyModel
+			.findOneAndUpdate(
+				{ _id: keyId, userId: decoded.id },
+				{ $set: { allowedIPs: newIPs } },
+				{ new: true, runValidators: true },
+			)
+			.lean();
+		if (!apikey) {
+			return res.status(404).json(standardResponse(false, "API key not found"));
+		}
+		return res.status(200).json(
+			standardResponse(true, "API key IP whitelist updated successfully", {
+				updateStatus: "success",
+				apikey,
+			}),
+		);
 	} catch (error) {
 		next(error);
 	}
