@@ -1,18 +1,24 @@
 // ============ RATE LIMITING ============
 const contants = {
-	AUTH_RATE_LIMIT_MAX: 10,
-	OTP_RATE_LIMIT_MAX: 10,
-	UPDATE_RATE_LIMIT_MAX: 5,
-	APIKEY_CREATION_RATE_LIMIT_MAX: 20,
-	GENERAL_APIKEY_RATE_LIMIT_MAX: 25,
-	GENERAL_API_POINT_RATE_LIMIT_MAX: 100,
-	APIKEY_UPDATE_RATE_LIMIT_MAX:15,
-	GENERAL_API_POINT_RL_TIME_WINDOW_MS: 15 * 60 * 1000,
-	OTP_RL_TIME_WINDOW_MS: 10 * 60 * 1000,
+	GENERAL_API_RL_TIME_WINDOW_MS: 15 * 60 * 1000,
+	GENERAL_API_RATE_LIMIT_MAX: 100,
+
 	AUTH_RL_TIME_WINDOW_MS: 10 * 60 * 1000,
-	UPDATE_RL_TIME_WINDOW_MS: 2 * 60 * 1000,
+	AUTH_RATE_LIMIT_MAX: 10,
+
+	OTP_RL_TIME_WINDOW_MS: 10 * 60 * 1000,
+	OTP_RATE_LIMIT_MAX: 5,
+
+	PROFILE_UPDATE_RATE_LIMIT_MAX: 1,
+	PROFILE_UPDATE_RL_TIME_WINDOW_MS: 2 * 60 * 1000,
+
+	APIKEY_CREATION_RATE_LIMIT_MAX: 1,
 	APIKEY_CREATION_RL_TIME_WINDOW_MS: 5 * 60 * 1000,
+	
+	GENERAL_APIKEY_RATE_LIMIT_MAX: 5,
 	GENERAL_APIKEY_RL_TIME_WINDOW_MS: 10 * 60 * 1000,
+	
+	APIKEY_UPDATE_RATE_LIMIT_MAX:5,
 	APIKEY_UPDATE_RL_TIME_WINDOW_MS:10*60*1000,
 };
 
@@ -77,64 +83,17 @@ export const USER_LIMITS = {
 
 // ============ REDIS PREFIXES ============
 export const REDIS_PREFIXES = {
-	RATE_LIMIT_API: 'rl:api:',
-	RATE_LIMIT_AUTH: 'rl:auth:',
-	RATE_LIMIT_OTP_GEN: 'rl:otp:gen:',
-	RATE_LIMIT_OTP_VERIFY: 'rl:otp:verify:',
-	RATE_LIMIT_UPDATE: 'rl:update:',
-	RATE_LIMIT_API_UPDATE: 'rl:api:update:',
 	RATE_LIMIT_GENERAL_API: 'rl:general:api:',
+	RATE_LIMIT_AUTH: 'rl:auth:',
+	RATE_LIMIT_OTP_GENERATION: 'rl:otp:generation:',
+	RATE_LIMIT_OTP_VERIFICATION: 'rl:otp:verification:',
+	RATE_LIMIT_PROFILE_UPDATE: 'rl:profile:update:',
+	RATE_LIMIT_GENERAL_APIKEY: 'rl:apikey:general:',
+	RATE_LIMIT_APIKEY_CREATION: 'rl:apikey:creation:',
+	RATE_LIMIT_APIKEY_UPDATE: 'rl:apikey:update:',
 	OTP_STORAGE: 'otp:',
 	SESSION: 'session:',
 } as const;
 
-// ============ EMAIL PURPOSES ============
-export const EMAIL_PURPOSES = {
-	VERIFICATION: 'verification',
-	PASSWORD_RESET: 'password_reset',
-	ACCOUNT_RECOVERY: 'account_recovery',
-	EMAIL_CHANGE: 'email_change',
-} as const;
-
-export const EMAIL_PURPOSE_ABBR = {
-	VERIFICATION: 'VER',
-	PASSWORD_RESET: 'PWD',
-	ACCOUNT_RECOVERY: 'REC',
-	EMAIL_CHANGE: 'EMC',
-} as const;
-
-// ============ STATUS ENUMS ============
-export const USER_STATUS = {
-	ACTIVE: 'Active',
-	LOCKED: 'Locked',
-	TEMP_LOCKED: 'TempLocked',
-	DELETED: 'Deleted',
-} as const;
-
-export const SESSION_STATUS = {
-	ACTIVE: 'Active',
-	REVOKED: 'Revoked',
-	EXPIRED: 'Expired',
-} as const;
-
-export const SUBSCRIPTION_STATUS = {
-	ACTIVE: 'Active',
-	EXPIRED: 'Expired',
-	CANCELLED: 'Cancelled',
-	PENDING: 'Pending',
-} as const;
-
-export const PAYMENT_STATUS = {
-	PENDING: 'Pending',
-	COMPLETED: 'Completed',
-	FAILED: 'Failed',
-} as const;
-
-export const PAYMENT_METHODS = {
-	CARD: 'card',
-	NETBANKING: 'netbanking',
-	UPI: 'upi',
-	WALLET: 'wallet',
-} as const;
 
 export default contants;
