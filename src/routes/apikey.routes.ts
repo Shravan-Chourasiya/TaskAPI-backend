@@ -3,7 +3,7 @@ import {
 	updateApiKeySchema,
 } from "../libs/zod/apikey.zodschema.js";
 import {
-	apiCreationRL,
+	apiCreationLimiter,
 	apiKeyUpdateLimiter,
 	generalApiKeyLimiter,
 } from "../middlewares/ratelimiting.middleware.js";
@@ -15,7 +15,7 @@ const router = Router();
 
 router.post(
 	"/create/apikey",
-	apiCreationRL,
+	apiCreationLimiter,
 	ZodValidatorMiddleware(apiKeyCreationSchema),
 	apiKeyController.createApiKeyController,
 );
@@ -27,7 +27,7 @@ router.get(
 );
 
 router.post(
-	"/revoke/apikey/:keyId",
+	"/revoke/:keyId",
 	generalApiKeyLimiter,
 	apiKeyController.revokeApiKeyController,
 );
