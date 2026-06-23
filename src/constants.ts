@@ -14,18 +14,21 @@ const contants = {
 
 	APIKEY_CREATION_RATE_LIMIT_MAX: 1,
 	APIKEY_CREATION_RL_TIME_WINDOW_MS: 5 * 60 * 1000,
-	
+
 	GENERAL_APIKEY_RATE_LIMIT_MAX: 5,
 	GENERAL_APIKEY_RL_TIME_WINDOW_MS: 10 * 60 * 1000,
-	
-	APIKEY_UPDATE_RATE_LIMIT_MAX:5,
-	APIKEY_UPDATE_RL_TIME_WINDOW_MS:10*60*1000,
+
+	APIKEY_UPDATE_RATE_LIMIT_MAX: 5,
+	APIKEY_UPDATE_RL_TIME_WINDOW_MS: 10 * 60 * 1000,
+
+	APIKEY_USAGE_RATE_LIMIT_MAX: 50,
+	APIKEY_USAGE_RL_TIME_WINDOW_MS: 10 * 60 * 1000,
 };
 
 // ============ AUTHENTICATION & SECURITY ============
 export const AUTH_CONSTANTS = {
-	ACCESS_TOKEN_EXPIRY: '10m',
-	REFRESH_TOKEN_EXPIRY: '7d',
+	ACCESS_TOKEN_EXPIRY: "10m",
+	REFRESH_TOKEN_EXPIRY: "7d",
 	MAX_ACTIVE_SESSIONS: 5,
 	FAILED_LOGIN_THRESHOLD_LOCK: 5,
 	FAILED_LOGIN_THRESHOLD_TEMP_LOCK: 10,
@@ -39,8 +42,8 @@ export const AUTH_CONSTANTS = {
 // ============ FILE UPLOAD ============
 export const FILE_UPLOAD_CONSTANTS = {
 	MAX_FILE_SIZE: 5 * 1024 * 1024,
-	ALLOWED_MIMETYPES: ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'],
-	AVATAR_FIELD_NAME: 'avatar',
+	ALLOWED_MIMETYPES: ["image/jpeg", "image/png", "image/jpg", "image/webp"],
+	AVATAR_FIELD_NAME: "avatar",
 } as const;
 
 // ============ SUBSCRIPTION ============
@@ -51,9 +54,9 @@ export const SUBSCRIPTION_PLANS = {
 };
 
 export const SUBSCRIPTION_CONSTANTS = {
-	CURRENCY: 'INR',
+	CURRENCY: "INR",
 	DAYS_PER_MONTH: 28,
-	TRANSACTION_ID_PREFIX: 'TXN',
+	TRANSACTION_ID_PREFIX: "TXN",
 	TRANSACTION_ID_BYTES: 8,
 } as const;
 
@@ -67,7 +70,7 @@ export const getPlanPrice = (
 export const COOKIE_CONSTANTS = {
 	HTTP_ONLY: true,
 	SECURE: true,
-	SAME_SITE: 'strict' as const,
+	SAME_SITE: "strict" as const,
 	ACCESS_TOKEN_MAX_AGE: 10 * 60 * 1000,
 	REFRESH_TOKEN_MAX_AGE: 7 * 24 * 60 * 60 * 1000,
 } as const;
@@ -83,17 +86,17 @@ export const USER_LIMITS = {
 
 // ============ REDIS PREFIXES ============
 export const REDIS_PREFIXES = {
-	RATE_LIMIT_GENERAL_API: 'rl:general:api:',
-	RATE_LIMIT_AUTH: 'rl:auth:',
-	RATE_LIMIT_OTP_GENERATION: 'rl:otp:generation:',
-	RATE_LIMIT_OTP_VERIFICATION: 'rl:otp:verification:',
-	RATE_LIMIT_PROFILE_UPDATE: 'rl:profile:update:',
-	RATE_LIMIT_GENERAL_APIKEY: 'rl:apikey:general:',
-	RATE_LIMIT_APIKEY_CREATION: 'rl:apikey:creation:',
-	RATE_LIMIT_APIKEY_UPDATE: 'rl:apikey:update:',
-	OTP_STORAGE: 'otp:',
-	SESSION: 'session:',
+	RATE_LIMIT_GENERAL_API: "rl:general:api:",
+	RATE_LIMIT_AUTH: "rl:auth:",
+	RATE_LIMIT_OTP_GENERATION: "rl:otp:generation:",
+	RATE_LIMIT_OTP_VERIFICATION: "rl:otp:verification:",
+	RATE_LIMIT_PROFILE_UPDATE: "rl:profile:update:",
+	RATE_LIMIT_GENERAL_APIKEY: "rl:apikey:general:",
+	RATE_LIMIT_APIKEY_CREATION: "rl:apikey:creation:",
+	RATE_LIMIT_APIKEY_UPDATE: "rl:apikey:update:",
+	RATE_LIMIT_APIKEY_USAGE: "rl:apikey:usage:",
+	OTP_STORAGE: "otp:",
+	SESSION: "session:",
 } as const;
-
 
 export default contants;

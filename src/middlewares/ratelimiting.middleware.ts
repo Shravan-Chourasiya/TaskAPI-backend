@@ -92,7 +92,6 @@ export const otpGenerationLimiter = rateLimit({
 		return email ? `email:${hashEmail(email)}` : `ip:${ip}`;
 	},
 	handler: rateLimitHandler,
-	skipFailedRequests: true, // Only count successful OTP generations
 });
 
 // ============ OTP VERIFICATION RATE LIMITER ============
@@ -149,7 +148,6 @@ export const generalApiKeyLimiter = rateLimit({
 		return acToken ? `token:${hashEmail(acToken)}` : `ip:${ip}`;
 	},
 	handler: rateLimitHandler,
-	skipSuccessfulRequests: true, // Only count failed verifications
 });
 
 // ============ APIKEY CREATION RATE LIMITER ============
@@ -190,3 +188,24 @@ export const apiKeyUpdateLimiter = rateLimit({
 	handler: rateLimitHandler,
 	skipSuccessfulRequests: true, // Only count failed verifications
 });
+
+// ============ RATE LIMITER FOR CALLS WITH API KEYS [X-API-KEY] ============
+export const apikeyUsageLimiter = rateLimit({
+	windowMs: constants.APIKEY_USAGE_RL_TIME_WINDOW_MS, // 10 minutes
+	limit: constants.APIKEY_USAGE_RATE_LIMIT_MAX, // 50 requests per 10 min
+	standardHeaders: "draft-7",
+	legacyHeaders: false,
+	store: new RedisStore({
+		sendCommand,
+		prefix: REDIS_PREFIXES.RATE_LIMIT_APIKEY_USAGE,
+	}),
+	keyGenerator: (req) => {
+		const apikey = req.headers["x-api-key"] as string | undefined;
+		const ip = ipKeyGenerator((req.ip as string) || "unknown");
+		return apikey ? `apikey:${apikey}` : `ip:${ip}`;
+	},
+	handler: rateLimitHandler,
+});
+
+
+
