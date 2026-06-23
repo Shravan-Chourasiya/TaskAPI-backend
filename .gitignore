@@ -8,3 +8,4 @@ statuscodes.md
 session*.md
 dbresetScript.ts
 dist/*
+scripts/
