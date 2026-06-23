@@ -6,6 +6,7 @@ export const config: Config = {
 	BASE_URL: getEnvVar("BASE_URL"),
 	MONGO_URI: getEnvVar("MONGO_URI"),
 	DB_NAME: getEnvVar("DB_NAME"),
+	POSTGRES_DB_URI: getEnvVar("PG_DB_URI"),
 	REFRESH_TOKEN_JWT_SECRET: getEnvVar("REFRESH_TOKEN_JWT_SECRET"),
 	ACCESS_TOKEN_JWT_SECRET: getEnvVar("ACCESS_TOKEN_JWT_SECRET"),
 	NODE_ENV: getEnvVar("NODE_ENV"),

@@ -9,9 +9,10 @@ import { apiRateLimiter } from "./middlewares/ratelimiting.middleware.js";
 import { subscriptionRouter } from "./routes/subscription.routes.js";
 import { generalRouter } from "./routes/general.routes.js";
 import { apiKeyRouter } from "./routes/apikey.routes.js";
+import { getPgPool } from "./configs/pgdb.init.js";
 
 const app = express();
-
+await getPgPool();
 await dbConnect();
 
 const corsOptions = {
