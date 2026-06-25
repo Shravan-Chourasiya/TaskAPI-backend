@@ -7,7 +7,7 @@ import type { Request, Response } from "express";
 import { redisClient } from "../configs/redis.init.js";
 import crypto from "crypto";
 import constants from "../constants.js";
-import { REDIS_PREFIXES } from "../constants.js";
+import { APP_REDIS_PREFIXES } from "../constants.js";
 
 type RequestWithUser = Request & {
 	userID?: string;
@@ -45,7 +45,7 @@ export const apiRateLimiter = rateLimit({
 	legacyHeaders: false,
 	store: new RedisStore({
 		sendCommand,
-		prefix: REDIS_PREFIXES.RATE_LIMIT_GENERAL_API,
+		prefix: APP_REDIS_PREFIXES.RATE_LIMIT_GENERAL_API,
 	}),
 	keyGenerator: (req: RequestWithUser) => {
 		const userID = req.userID;
@@ -65,7 +65,7 @@ export const authRateLimiter = rateLimit({
 	legacyHeaders: false,
 	store: new RedisStore({
 		sendCommand,
-		prefix: REDIS_PREFIXES.RATE_LIMIT_AUTH,
+		prefix: APP_REDIS_PREFIXES.RATE_LIMIT_AUTH,
 	}),
 	keyGenerator: (req) => {
 		const email = req.body.email?.toLowerCase();
@@ -84,7 +84,7 @@ export const otpGenerationLimiter = rateLimit({
 	legacyHeaders: false,
 	store: new RedisStore({
 		sendCommand,
-		prefix: REDIS_PREFIXES.RATE_LIMIT_OTP_GENERATION,
+		prefix: APP_REDIS_PREFIXES.RATE_LIMIT_OTP_GENERATION,
 	}),
 	keyGenerator: (req) => {
 		const email = req.body.email?.toLowerCase();
@@ -102,7 +102,7 @@ export const otpVerificationLimiter = rateLimit({
 	legacyHeaders: false,
 	store: new RedisStore({
 		sendCommand,
-		prefix: REDIS_PREFIXES.RATE_LIMIT_OTP_VERIFICATION,
+		prefix: APP_REDIS_PREFIXES.RATE_LIMIT_OTP_VERIFICATION,
 	}),
 	keyGenerator: (req) => {
 		const email = req.body.email?.toLowerCase();
@@ -121,7 +121,7 @@ export const profileUpdateLimiter = rateLimit({
 	legacyHeaders: false,
 	store: new RedisStore({
 		sendCommand,
-		prefix: REDIS_PREFIXES.RATE_LIMIT_PROFILE_UPDATE,
+		prefix: APP_REDIS_PREFIXES.RATE_LIMIT_PROFILE_UPDATE,
 	}),
 	keyGenerator: (req) => {
 		const devId = req.cookies.devid?.toLowerCase();
@@ -140,7 +140,7 @@ export const generalApiKeyLimiter = rateLimit({
 	legacyHeaders: false,
 	store: new RedisStore({
 		sendCommand,
-		prefix: REDIS_PREFIXES.RATE_LIMIT_GENERAL_APIKEY,
+		prefix: APP_REDIS_PREFIXES.RATE_LIMIT_GENERAL_APIKEY,
 	}),
 	keyGenerator: (req) => {
 		const acToken = req.cookies.acToken?.toLowerCase();
@@ -158,7 +158,7 @@ export const apiCreationLimiter = rateLimit({
 	legacyHeaders: false,
 	store: new RedisStore({
 		sendCommand,
-		prefix: REDIS_PREFIXES.RATE_LIMIT_APIKEY_CREATION,
+		prefix: APP_REDIS_PREFIXES.RATE_LIMIT_APIKEY_CREATION,
 	}),
 	keyGenerator: (req) => {
 		const acToken = req.cookies.acToken?.toLowerCase();
@@ -178,7 +178,7 @@ export const apiKeyUpdateLimiter = rateLimit({
 	legacyHeaders: false,
 	store: new RedisStore({
 		sendCommand,
-		prefix: REDIS_PREFIXES.RATE_LIMIT_APIKEY_UPDATE,
+		prefix: APP_REDIS_PREFIXES.RATE_LIMIT_APIKEY_UPDATE,
 	}),
 	keyGenerator: (req) => {
 		const acToken = req.cookies.acToken?.toLowerCase();
@@ -197,7 +197,7 @@ export const apikeyUsageLimiter = rateLimit({
 	legacyHeaders: false,
 	store: new RedisStore({
 		sendCommand,
-		prefix: REDIS_PREFIXES.RATE_LIMIT_APIKEY_USAGE,
+		prefix: APP_REDIS_PREFIXES.RATE_LIMIT_APIKEY_USAGE,
 	}),
 	keyGenerator: (req) => {
 		const apikey = req.headers["x-api-key"] as string | undefined;

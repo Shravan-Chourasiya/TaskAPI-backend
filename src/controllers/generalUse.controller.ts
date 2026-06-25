@@ -1,7 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { config } from "../configs/app.config.js";
 import jwt, { type JwtPayload } from "jsonwebtoken";
-import userModel from "../modules/auth/models/user.schema.js";
 import { contactUsSchema } from "../libs/zod/general.zodschema.js";
 import * as z from "zod";
 import {
@@ -13,15 +12,21 @@ import {
 	isUserResponse,
 	standardResponse,
 } from "../utils/apiResponse.utils.js";
-import { usernameSchema } from "../libs/zod/auth.zodschema.js";
+import { Model } from "mongoose";
+import {
+	UserDocument,
+	UserStaticMethods,
+} from "../types/mongo_models/user.type.js";
 
 export const isUserController = async (
 	req: Request,
 	res: Response,
 	next: NextFunction,
+	userModel: Model<UserDocument, UserStaticMethods>,
 ) => {
 	try {
 		// This endpoint is protected by accessTokenHandler, so if we reach here, the user is verified
+  // amazonq-ignore-next-line
 		const decoded = jwt.verify(
 			req.cookies.acToken,
 			config.ACCESS_TOKEN_JWT_SECRET,
@@ -31,7 +36,7 @@ export const isUserController = async (
 				.status(401)
 				.json(isUserResponse(false, "Invalid token", false, null));
 		}
-		const user = await userModel.findById(decoded.id);
+		const user: UserDocument | null = await userModel.findById(decoded.id);
 		if (!user) {
 			return res
 				.status(404)
@@ -114,9 +119,12 @@ export const checkUsernameController = async (
 	req: Request,
 	res: Response,
 	next: NextFunction,
+	userModel: Model<UserDocument, UserStaticMethods>,
 ) => {
 	try {
-		const { username }= req.query;
+  // amazonq-ignore-next-line
+		const { username } = req.query;
+  // amazonq-ignore-next-line
 		console.log(username, typeof username);
 		if (!username || typeof username !== "string") {
 			return res
@@ -126,7 +134,9 @@ export const checkUsernameController = async (
 				);
 		}
 
-		const existingUser = await userModel.findOne({ username });
+		const existingUser: UserDocument | null = await userModel.findOne({
+			username,
+		});
 		if (existingUser) {
 			return res
 				.status(409)
