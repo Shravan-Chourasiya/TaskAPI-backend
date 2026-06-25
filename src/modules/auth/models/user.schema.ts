@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import type {
+	UserDocument,
 	UserType,
 	UserStaticMethods,
 } from "../../../types/mongo_models/user.type.js";
@@ -181,7 +182,7 @@ export const userSchema = new mongoose.Schema(
 			type: String,
 			enum: ["Free", "Basic", "Pro"],
 		},
-		
+
 		subscriptionExpiryDate: {
 			type: Date,
 		},
@@ -189,7 +190,7 @@ export const userSchema = new mongoose.Schema(
 		apiKeyCount: {
 			type: Number,
 			default: 0,
-			max:26,
+			max: 26,
 		},
 
 		isDeleted: {
@@ -502,9 +503,6 @@ userSchema.statics.getStatistics = async function () {
 	return { total, active, unverified, suspended, deleted };
 };
 
-const userModel = mongoose.model<UserType, UserStaticMethods>(
-	"Users",
-	userSchema,
-);
-
-export default userModel;
+export function initUserModel(TaskapiDb: mongoose.Connection) {
+	return TaskapiDb.model<UserDocument, UserStaticMethods>("Users", userSchema);
+}

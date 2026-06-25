@@ -1,0 +1,654 @@
+openapi: 3.0.3
+info:
+  title: TaskAPI Backend
+  version: 1.0.0
+  description: OpenAPI spec for importing TaskAPI endpoints into Postman.
+servers:
+  - url: http://localhost:3000
+    description: Local development server
+tags:
+  - name: Auth
+    description: Authentication, account, and password routes
+  - name: General
+    description: Public and utility routes
+  - name: Subscription
+    description: Subscription purchase and payment routes
+  - name: Api Keys
+    description: API key management routes
+paths:
+  /api/v1/auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            example:
+              username: demo_user
+              email: demo@example.com
+              password: Password123!
+      responses:
+        '201':
+          description: User registered
+        '409':
+          description: Email already in use
+  /api/v1/auth/verify:
+    post:
+      tags: [Auth]
+      summary: Verify email or password reset OTP
+      parameters:
+        - in: query
+          name: purpose
+          required: true
+          schema:
+            type: string
+          description: Verification purpose value such as ve-em-or, ve-em-up, re-pa, or ac-re
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyRequest'
+            example:
+              otp: '123456'
+              email: demo@example.com
+      responses:
+        '200':
+          description: OTP verified
+        '400':
+          description: Invalid OTP or purpose
+  /api/v1/auth/login:
+    post:
+      tags: [Auth]
+      summary: Login a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              email: demo@example.com
+              password: Password123!
+      responses:
+        '200':
+          description: Logged in
+        '403':
+          description: Invalid credentials or account state
+  /api/v1/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout current session
+      security:
+        - refreshCookie: []
+      responses:
+        '200':
+          description: Logged out
+        '400':
+          description: Refresh token missing or invalid
+  /api/v1/auth/account/update:
+    patch:
+      tags: [Auth]
+      summary: Update account details
+      security:
+        - accessCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDetailsRequest'
+            example:
+              fieldToUpdate: username
+              newValue: new_username
+              password: Password123!
+      responses:
+        '200':
+          description: Update initiated or completed
+  /api/v1/auth/profile/update:
+    patch:
+      tags: [Auth]
+      summary: Update user profile
+      security:
+        - accessCookie: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProfileUpdateRequest'
+            example:
+              newValue:
+                firstName: Jane
+                lastName: Doe
+                country: India
+      responses:
+        '200':
+          description: Profile updated
+  /api/v1/auth/account/delete:
+    delete:
+      tags: [Auth]
+      summary: Schedule account deletion
+      security:
+        - accessCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Account scheduled for deletion
+  /api/v1/auth/account/recover:
+    patch:
+      tags: [Auth]
+      summary: Recover a deleted account
+      security:
+        - accessCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Recovery OTP sent
+  /api/v1/auth/account/info:
+    get:
+      tags: [Auth]
+      summary: Get current account info
+      security:
+        - accessCookie: []
+      responses:
+        '200':
+          description: Account details fetched
+  /api/v1/auth/forgot-password/init:
+    post:
+      tags: [Auth]
+      summary: Initiate forgot password flow
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+            example:
+              email: demo@example.com
+      responses:
+        '200':
+          description: OTP sent
+  /api/v1/auth/forgot-password/update:
+    post:
+      tags: [Auth]
+      summary: Finish forgot password flow
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForgotPasswordUpdateRequest'
+            example:
+              userId: 64f000000000000000000001
+              userEmail: demo@example.com
+              newPassword: NewPassword123!
+      responses:
+        '200':
+          description: Password updated
+  /api/v1/auth/token/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh access token
+      security:
+        - refreshCookie: []
+      responses:
+        '200':
+          description: Access token refreshed
+  /api/v1/auth/resend-otp:
+    post:
+      tags: [Auth]
+      summary: Resend OTP for a purpose
+      parameters:
+        - in: query
+          name: purpose
+          required: true
+          schema:
+            type: string
+          description: resend purpose value used by the backend
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+            example:
+              email: demo@example.com
+      responses:
+        '200':
+          description: OTP resent
+
+  /api/v1/is-user:
+    get:
+      tags: [General]
+      summary: Check whether the current token belongs to an active user
+      security:
+        - accessCookie: []
+      responses:
+        '200':
+          description: User state returned
+  /api/v1/health:
+    get:
+      tags: [General]
+      summary: Health check
+      responses:
+        '200':
+          description: Service is healthy
+  /api/v1/contact-us:
+    post:
+      tags: [General]
+      summary: Send contact us email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContactUsRequest'
+            example:
+              name: Demo User
+              email: demo@example.com
+              message: Hello, I need help with my account.
+      responses:
+        '200':
+          description: Message sent
+  /api/v1/check-username:
+    get:
+      tags: [General]
+      summary: Check whether a username is available
+      parameters:
+        - in: query
+          name: username
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Username available
+        '409':
+          description: Username already taken
+
+  /api/v1/subscription/create-order:
+    post:
+      tags: [Subscription]
+      summary: Create or upgrade a subscription order
+      security:
+        - accessCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BuySubscriptionRequest'
+            example:
+              subscriptionPlanDetails:
+                planName: Pro
+                price: 999
+                duration: 12
+                autoRenewStatus: true
+      responses:
+        '200':
+          description: Order created or subscription updated
+  /api/v1/subscription/verify-payment:
+    post:
+      tags: [Subscription]
+      summary: Verify a subscription payment
+      security:
+        - accessCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyPaymentRequest'
+            example:
+              transactionId: receipt_txn_123
+              razorPayID: pay_123
+              signature: sig_123
+              razorPayData:
+                transactionId: receipt_txn_123
+      responses:
+        '200':
+          description: Payment verified
+  /api/v1/subscription/webhook:
+    post:
+      tags: [Subscription]
+      summary: Webhook endpoint for subscription automation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [secret]
+              properties:
+                secret:
+                  type: string
+            example:
+              secret: webhook-secret
+      responses:
+        '200':
+          description: Webhook received
+
+  /api/v1/api-keys/create/apikey:
+    post:
+      tags: [Api Keys]
+      summary: Create a new API key
+      security:
+        - accessCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateApiKeyRequest'
+            example:
+              name: My Service Key
+              description: Key for external service integration
+              env: development
+              scopes: [read, write]
+              allowedIPs: [127.0.0.1]
+      responses:
+        '201':
+          description: API key created
+  /api/v1/api-keys/list/apikeys:
+    get:
+      tags: [Api Keys]
+      summary: List API keys for the current user
+      security:
+        - accessCookie: []
+      responses:
+        '200':
+          description: API keys returned
+  /api/v1/api-keys/revoke/{keyId}:
+    post:
+      tags: [Api Keys]
+      summary: Revoke an API key
+      security:
+        - accessCookie: []
+      parameters:
+        - in: path
+          name: keyId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: API key revoked
+  /api/v1/api-keys/update:
+    patch:
+      tags: [Api Keys]
+      summary: Update an API key
+      security:
+        - accessCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateApiKeyRequest'
+      responses:
+        '200':
+          description: API key updated
+  /api/v1/api-keys/update/name:
+    patch:
+      tags: [Api Keys]
+      summary: Update API key name
+      security:
+        - accessCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateApiNameRequest'
+      responses:
+        '200':
+          description: API key name updated
+  /api/v1/api-keys/update/scopes:
+    patch:
+      tags: [Api Keys]
+      summary: Update API key scopes
+      security:
+        - accessCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateApiScopesRequest'
+      responses:
+        '200':
+          description: API key scopes updated
+  /api/v1/api-keys/update/ips:
+    patch:
+      tags: [Api Keys]
+      summary: Update API key IP whitelist
+      security:
+        - accessCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateApiIPsRequest'
+      responses:
+        '200':
+          description: API key IPs updated
+  /api/v1/api-keys/delete/{keyId}:
+    delete:
+      tags: [Api Keys]
+      summary: Delete an API key
+      security:
+        - accessCookie: []
+      parameters:
+        - in: path
+          name: keyId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: API key deleted
+
+components:
+  securitySchemes:
+    accessCookie:
+      type: apiKey
+      in: cookie
+      name: acToken
+    refreshCookie:
+      type: apiKey
+      in: cookie
+      name: rfToken
+  schemas:
+    RegisterRequest:
+      type: object
+      required: [username, email, password]
+      properties:
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+    VerifyRequest:
+      type: object
+      required: [otp, email]
+      properties:
+        otp:
+          type: string
+        email:
+          type: string
+          format: email
+    UpdateDetailsRequest:
+      type: object
+      required: [fieldToUpdate, newValue, password]
+      properties:
+        fieldToUpdate:
+          type: string
+          enum: [username, email, password]
+        newValue:
+          oneOf:
+            - type: string
+            - type: object
+        password:
+          type: string
+    ProfileUpdateRequest:
+      type: object
+      properties:
+        newValue:
+          type: object
+          additionalProperties: true
+        file:
+          type: string
+          format: binary
+    ForgotPasswordUpdateRequest:
+      type: object
+      required: [userId, userEmail, newPassword]
+      properties:
+        userId:
+          type: string
+        userEmail:
+          type: string
+          format: email
+        newPassword:
+          type: string
+    ContactUsRequest:
+      type: object
+      required: [name, email, message]
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        message:
+          type: string
+    BuySubscriptionRequest:
+      type: object
+      required: [subscriptionPlanDetails]
+      properties:
+        subscriptionPlanDetails:
+          type: object
+          required: [planName, price, duration, autoRenewStatus]
+          properties:
+            planName:
+              type: string
+              enum: [Free, Basic, Pro]
+            price:
+              type: number
+            duration:
+              type: number
+            autoRenewStatus:
+              type: boolean
+    VerifyPaymentRequest:
+      type: object
+      required: [transactionId, razorPayID, signature, razorPayData]
+      properties:
+        transactionId:
+          type: string
+        razorPayID:
+          type: string
+        signature:
+          type: string
+        razorPayData:
+          type: object
+          additionalProperties: true
+    CreateApiKeyRequest:
+      type: object
+      required: [name, description, env, scopes, allowedIPs]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        env:
+          type: string
+          enum: [production, development, test]
+        scopes:
+          type: array
+          items:
+            type: string
+        allowedIPs:
+          type: array
+          items:
+            type: string
+    UpdateApiKeyRequest:
+      type: object
+      required: [keyId, keyUpdatesDetails]
+      properties:
+        keyId:
+          type: string
+        keyUpdatesDetails:
+          type: object
+          additionalProperties: true
+    UpdateApiNameRequest:
+      type: object
+      required: [keyId, newName]
+      properties:
+        keyId:
+          type: string
+        newName:
+          type: string
+    UpdateApiScopesRequest:
+      type: object
+      required: [keyId, newScopes]
+      properties:
+        keyId:
+          type: string
+        newScopes:
+          type: array
+          items:
+            type: string
+    UpdateApiIPsRequest:
+      type: object
+      required: [keyId, newIPs]
+      properties:
+        keyId:
+          type: string
+        newIPs:
+          type: array
+          items:
+            type: string
