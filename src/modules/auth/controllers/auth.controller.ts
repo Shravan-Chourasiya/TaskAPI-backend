@@ -17,31 +17,44 @@ import type {
 	phoneVerificationSchema,
 	profileUpdateSchema,
 } from "../../../libs/zod/auth.zodschema.js";
-import userModel from "../models/user.schema.js";
 import { otpService } from "../../../services/redisotp.service.js";
-import sessionModel from "../models/session.schema.js";
 import { sendVerificationSMS } from "../../../services/twilio.service.js";
 import { RequestWithFileUrl } from "../../../middlewares/fileupload.middleware.js";
 import { v4 as uuidv4 } from "uuid";
+import {
+	UserDocument,
+	UserStaticMethods,
+} from "../../../types/mongo_models/user.type.js";
+import {
+	SessionDocument,
+	SessionStaticMethods,
+} from "../../../types/mongo_models/session.type.js";
+import { Model } from "mongoose";
 
 export async function registerController(
 	req: Request,
 	res: Response,
 	next: NextFunction,
+	userModel: Model<UserDocument, UserStaticMethods>,
 ) {
 	const { username, email, password }: z.infer<typeof registerSchema> =
 		req.body;
 	try {
-		const existingUser = await userModel.findOne({ email, isVerified: true });
+		const existingUser: UserDocument | null = await userModel.findOne({
+			email,
+			isVerified: true,
+		});
 		if (existingUser) {
 			return res
 				.status(409)
 				.json({ message: "Email Already In Use.Go to Login" });
 		}
-		const existingUnverifiedUser = await userModel.findOne({
-			email,
-			isVerified: false,
-		});
+		const existingUnverifiedUser: UserDocument | null = await userModel.findOne(
+			{
+				email,
+				isVerified: false,
+			},
+		);
 
 		if (existingUnverifiedUser) {
 			const emailSubject = emailPurposeMapper("verifyEmailOR");
@@ -132,6 +145,8 @@ export async function loginController(
 	req: Request,
 	res: Response,
 	next: NextFunction,
+	userModel: Model<UserDocument, UserStaticMethods>,
+	sessionModel: SessionStaticMethods,
 ) {
 	const { email, password }: z.infer<typeof loginDeleteRecoverAccSchema> =
 		req.body;
@@ -145,7 +160,9 @@ export async function loginController(
 		}
 		const deviceId = req.cookies.devid;
 
-		const isUser = await userModel.findOne({ email }).select("+passwordHash");
+		const isUser: UserDocument | null = await userModel
+			.findOne({ email })
+			.select("+passwordHash");
 		if (!isUser) {
 			return res.status(404).json({ message: "User Not Found!" });
 		}
@@ -337,6 +354,8 @@ export async function tokenRotationController(
 	req: Request,
 	res: Response,
 	next: NextFunction,
+	userModel: Model<UserDocument, UserStaticMethods>,
+	sessionModel: SessionStaticMethods,
 ) {
 	try {
 		const rfToken = req.cookies.rfToken;
@@ -379,7 +398,9 @@ export async function tokenRotationController(
 				message: "Refresh token is invalid ! Login to get a new one.",
 			});
 		}
-		const user = await userModel.findOne({ _id: rfTokenDecoded.id });
+		const user: UserDocument | null = await userModel.findOne({
+			_id: rfTokenDecoded.id,
+		});
 
 		if (!user) {
 			return res.status(422).json({
@@ -441,6 +462,8 @@ export async function logoutController(
 	req: Request,
 	res: Response,
 	next: NextFunction,
+	userModel: Model<UserDocument, UserStaticMethods>,
+	sessionModel: SessionStaticMethods,
 ) {
 	try {
 		const rfToken = req.cookies.rfToken;
@@ -476,7 +499,9 @@ export async function logoutController(
 		await session.updateOne({ isRevoked: true });
 
 		// Decrement activeSessions count
-		const user = await userModel.findById(rfTokenDecoded.id);
+		const user: UserDocument | null = await userModel.findById(
+			rfTokenDecoded.id,
+		);
 		if (user && user.activeSessions > 0) {
 			user.activeSessions -= 1;
 			await user.save();
@@ -506,6 +531,7 @@ export async function updateDetailsController(
 	req: RequestWithFileUrl,
 	res: Response,
 	next: NextFunction,
+	userModel: Model<UserDocument, UserStaticMethods>,
 ) {
 	try {
 		const {
@@ -518,7 +544,9 @@ export async function updateDetailsController(
 			req.cookies.acToken,
 			config.ACCESS_TOKEN_JWT_SECRET,
 		) as JwtPayload;
-		const user = await userModel.findById(decodedToken.id).select("+passwordHash");
+		const user: UserDocument | null = await userModel
+			.findById(decodedToken.id)
+			.select("+passwordHash");
 		if (!user) {
 			return res.status(404).json({ message: "User Not Found!" });
 		}
@@ -611,6 +639,7 @@ export async function updateProfile(
 	req: RequestWithFileUrl,
 	res: Response,
 	next: NextFunction,
+	userModel: Model<UserDocument, UserStaticMethods>,
 ) {
 	try {
 		const { newValue }: z.infer<typeof profileUpdateSchema> = req.body;
@@ -620,7 +649,9 @@ export async function updateProfile(
 			req.cookies.acToken,
 			config.ACCESS_TOKEN_JWT_SECRET,
 		) as JwtPayload;
-		const user = await userModel.findOne({ _id: decodedToken.id });
+		const user: UserDocument | null = await userModel.findOne({
+			_id: decodedToken.id,
+		});
 		if (!user) {
 			return res.status(404).json({ message: "User Not Found!" });
 		}
@@ -652,6 +683,7 @@ export async function deleteAccountController(
 	req: Request,
 	res: Response,
 	next: NextFunction,
+	userModel: Model<UserDocument, UserStaticMethods>,
 ) {
 	try {
 		const acToken = req.cookies.acToken;
@@ -662,7 +694,9 @@ export async function deleteAccountController(
 		}
 		const { email, password }: z.infer<typeof loginDeleteRecoverAccSchema> =
 			req.body;
-		const user = await userModel.findOne({ email }).select("+passwordHash");
+		const user: UserDocument | null = await userModel
+			.findOne({ email })
+			.select("+passwordHash");
 
 		if (!user) {
 			return res.status(404).json({ message: "User Not Found!" });
@@ -694,11 +728,15 @@ export async function recoverDeletedAccountController(
 	req: Request,
 	res: Response,
 	next: NextFunction,
+	userModel: Model<UserDocument, UserStaticMethods>,
+	sessionModel: SessionStaticMethods,
 ) {
 	try {
 		const { email, password }: z.infer<typeof loginDeleteRecoverAccSchema> =
 			req.body;
-		const user = await userModel.findOne({ email }).select("+passwordHash");
+		const user: UserDocument | null = await userModel
+			.findOne({ email })
+			.select("+passwordHash");
 
 		if (!user) {
 			return res.status(404).json({ message: "User Not Found!" });
@@ -751,6 +789,7 @@ export async function getUserAccountController(
 	req: Request,
 	res: Response,
 	next: NextFunction,
+	userModel: Model<UserDocument, UserStaticMethods>,
 ) {
 	try {
 		const accessToken = req.cookies.acToken;
@@ -759,7 +798,9 @@ export async function getUserAccountController(
 			config.ACCESS_TOKEN_JWT_SECRET,
 		) as JwtPayload;
 
-		const user = await userModel.findOne({ _id: decodedToken.id });
+		const user: UserDocument | null = await userModel.findOne({
+			_id: decodedToken.id,
+		});
 
 		if (!user) {
 			return res.status(404).json({ message: "User Not Found!" });
@@ -789,6 +830,8 @@ export async function verificationController(
 	req: Request,
 	res: Response,
 	next: NextFunction,
+	userModel: Model<UserDocument, UserStaticMethods>,
+	sessionModel: SessionStaticMethods,
 ) {
 	try {
 		const { otp, email }: z.infer<typeof otpSchema> = req.body;
@@ -808,7 +851,9 @@ export async function verificationController(
 						"Invalid OTP verification attempt.Please try registering after some Time.",
 				});
 			}
-			const user = await userModel.findOne({ _id: userId });
+			const user: UserDocument | null = await userModel.findOne({
+				_id: userId,
+			});
 			if (!user) {
 				return res.status(404).json({ message: "User Not Found!" });
 			}
@@ -839,7 +884,9 @@ export async function verificationController(
 						"Invalid OTP verification attempt.Please try registering after some Time.",
 				});
 			}
-			const user = await userModel.findOne({ _id: userId });
+			const user: UserDocument | null = await userModel.findOne({
+				_id: userId,
+			});
 			if (!user) {
 				return res.status(404).json({ message: "User Not Found!" });
 			}
@@ -871,7 +918,9 @@ export async function verificationController(
 						"Invalid OTP verification attempt.Please try registering after some Time.",
 				});
 			}
-			const user = await userModel.findOne({ _id: userId });
+			const user: UserDocument | null = await userModel.findOne({
+				_id: userId,
+			});
 			if (!user) {
 				return res.status(404).json({ message: "User Not Found!" });
 			}
@@ -937,7 +986,10 @@ export async function verificationController(
 						"Invalid OTP verification attempt.Please try registering after some Time.",
 				});
 			}
-			const user = await userModel.findOne({ _id: userId, isDeleted: true });
+			const user: UserDocument | null = await userModel.findOne({
+				_id: userId,
+				isDeleted: true,
+			});
 			if (!user) {
 				return res.status(404).json({ message: "User Not Found!" });
 			}
@@ -966,11 +1018,12 @@ export async function resendOtpController(
 	req: Request,
 	res: Response,
 	next: NextFunction,
+	userModel: Model<UserDocument, UserStaticMethods>,
 ) {
 	try {
 		const purpose = req.query.purpose;
 		const { email }: z.infer<typeof otpResendSchema> = req.body;
-		const user = await userModel.findOne({ email });
+		const user: UserDocument | null = await userModel.findOne({ email });
 		if (!user) {
 			return res.status(404).json({ message: "User Not Found!" });
 		}
@@ -1049,6 +1102,7 @@ export async function verifyPhoneController(
 	req: Request,
 	res: Response,
 	next: NextFunction,
+	userModel: Model<UserDocument, UserStaticMethods>,
 ) {
 	try {
 		const { phoneNumber, otp }: z.infer<typeof phoneVerificationSchema> =
@@ -1061,7 +1115,7 @@ export async function verifyPhoneController(
 		if (!result.success) {
 			return res.status(400).json({ message: result.message });
 		}
-		const user = await userModel.findOneAndUpdate(
+		const user: UserDocument | null = await userModel.findOneAndUpdate(
 			{ phoneNumber },
 			{ isPhoneVerified: true },
 		);
@@ -1082,6 +1136,7 @@ export async function forgotPasswordEmailController(
 	req: Request,
 	res: Response,
 	next: NextFunction,
+	userModel: Model<UserDocument, UserStaticMethods>,
 ) {
 	try {
 		const { email } = req.body;
@@ -1089,7 +1144,7 @@ export async function forgotPasswordEmailController(
 		if (!email) {
 			return res.status(400).json({ message: "Email is required!" });
 		}
-		const user = await userModel.findOne({ email });
+		const user: UserDocument | null = await userModel.findOne({ email });
 		if (!user) {
 			return res.status(404).json({ message: "User Not Found!" });
 		}
@@ -1136,6 +1191,8 @@ export async function forgotPasswordUpdateController(
 	req: Request,
 	res: Response,
 	next: NextFunction,
+	userModel: Model<UserDocument, UserStaticMethods>,
+	sessionModel: SessionStaticMethods,
 ) {
 	try {
 		const { userId, userEmail, newPassword } = req.body;
@@ -1144,7 +1201,10 @@ export async function forgotPasswordUpdateController(
 				.status(400)
 				.json({ message: "Email	 and New Password are required!" });
 		}
-		const user = await userModel.findOne({ _id: userId, email: userEmail });
+		const user: UserDocument | null = await userModel.findOne({
+			_id: userId,
+			email: userEmail,
+		});
 		if (!user) {
 			return res.status(404).json({ message: "User Not Found!" });
 		}

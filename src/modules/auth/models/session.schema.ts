@@ -241,9 +241,12 @@ sessionSchema.statics.countActiveSessions = function (userId: string) {
 	});
 };
 
-const sessionModel = mongoose.model<SessionType, SessionStaticMethods>(
-	"Sessions",
-	sessionSchema,
-);
 
-export default sessionModel;
+
+export function initSessionModel(TaskapiDb: mongoose.Connection) {
+	return TaskapiDb.model<SessionType, SessionStaticMethods>(
+		"Sessions",
+		sessionSchema,
+	);
+}
+

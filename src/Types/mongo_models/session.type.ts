@@ -1,4 +1,4 @@
-import type { Model, Document } from "mongoose";
+import type { Model, Document, Types } from "mongoose";
 
 export type SessionType = {
 	userId: string;
@@ -40,6 +40,6 @@ export interface SessionStaticMethods extends Model<
 }
 
 // Combined document type
-export type SessionDocument = Document<unknown, object, SessionType> &
+export type SessionDocument = Document<Types.ObjectId, object, SessionType> &
 	SessionType &
 	SessionInstanceMethods;
