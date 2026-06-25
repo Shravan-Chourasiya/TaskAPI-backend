@@ -1,4 +1,4 @@
-import type { Model } from "mongoose";
+import type { Document, Model } from "mongoose";
 
 export type ApiKeyType = {
 	userId: string;
@@ -27,22 +27,18 @@ export type ApiKeyType = {
 	environment: "production" | "development" | "test";
 	createdAt: Date;
 	updatedAt: Date;
-
-	// Virtual fields
-	isExpired: boolean;
-	isActive: boolean;
-	daysUntilExpiry: number | null;
-
-	// Instance methods
-	revoke: (reason?: string) => Promise<void>;
-	blacklist: (reason?: string) => Promise<void>;
-	updateUsage: () => Promise<void>;
-	verifyKey: (plainKey: string) => boolean;
-	hasScope: (requiredScope: string) => boolean;
-	isIPAllowed: (ip: string) => boolean;
 };
 
-export type ApiKeyStaticMethods = Model<ApiKeyType> & {
-	findActiveKeys: (userId: string) => Promise<ApiKeyType[]>;
-	revokeAllUserKeys: (userId: string, reason?: string) => Promise<void>;
-};
+export interface ApiKeyDocument extends ApiKeyType, Document {
+	revoke(reason?: string): Promise<void>;
+	blacklist(reason?: string): Promise<void>;
+	updateUsage(): Promise<void>;
+	verifyKey(plainKey: string): boolean;
+	hasScope(requiredScope: string): boolean;
+	isIPAllowed(ip: string): boolean;
+}
+
+export interface ApiKeyStaticMethods extends Model<ApiKeyDocument> {
+	findActiveKeys(userId: string): Promise<ApiKeyDocument[]>;
+	revokeAllUserKeys(userId: string, reason?: string): Promise<void>;
+}

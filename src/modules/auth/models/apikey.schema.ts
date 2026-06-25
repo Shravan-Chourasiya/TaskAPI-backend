@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import type {
+	ApiKeyDocument,
 	ApiKeyType,
 	ApiKeyStaticMethods,
 } from "../../../types/mongo_models/apikeys.type.js";
@@ -272,11 +273,12 @@ apiKeySchema.statics.revokeAllUserKeys = async function (
 	);
 };
 
-
 apiKeySchema.set("toJSON", { virtuals: true });
 apiKeySchema.set("toObject", { virtuals: true });
 
-export const apiKeyModel = mongoose.model<ApiKeyType, ApiKeyStaticMethods>(
-	"ApiKey",
-	apiKeySchema,
-);
+export function initApiKeyModel(TaskapiDb: mongoose.Connection) {
+	return TaskapiDb.model<ApiKeyDocument, ApiKeyStaticMethods>(
+		"ApiKey",
+		apiKeySchema,
+	);
+}

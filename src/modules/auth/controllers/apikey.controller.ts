@@ -9,17 +9,26 @@ import {
 	updateApiNameSchema,
 	updateApiScopesSchema,
 } from "../../../libs/zod/apikey.zodschema.js";
-import userModel from "../models/user.schema.js";
 import * as z from "zod";
-import { apiKeyModel } from "../models/apikey.schema.js";
 import crypto from "crypto";
 import { standardResponse } from "../../../utils/apiResponse.utils.js";
 import mongoose from "mongoose";
+import { Model } from "mongoose";
+import {
+	ApiKeyDocument,
+	ApiKeyStaticMethods,
+} from "../../../types/mongo_models/apikeys.type.js";
+import {
+	UserDocument,
+	UserStaticMethods,
+} from "../../../types/mongo_models/user.type.js";
 
 export const createApiKeyController = async (
 	req: Request,
 	res: Response,
 	next: NextFunction,
+	userModel: Model<UserDocument, UserStaticMethods>,
+	apiKeyModel: Model<ApiKeyDocument, ApiKeyStaticMethods>,
 ) => {
 	try {
 		const {
@@ -49,7 +58,7 @@ export const createApiKeyController = async (
 
 		const userId = decoded.id;
 		console.log("#####1:Decoded JWT payload:", decoded, userId);
-		const user = await userModel.findById(userId);
+		const user: UserDocument | null = await userModel.findById(userId);
 
 		if (!user) {
 			return res.status(404).json(standardResponse(false, "User not found"));
@@ -108,7 +117,7 @@ export const createApiKeyController = async (
 			apiKeyValue,
 		);
 
-		const apiKey = await apiKeyModel.create({
+		const apiKey: ApiKeyDocument = await apiKeyModel.create({
 			userId,
 			name,
 			description,
@@ -146,6 +155,8 @@ export const listApiKeysController = async (
 	req: Request,
 	res: Response,
 	next: NextFunction,
+	userModel: Model<UserDocument, UserStaticMethods>,
+	apiKeyModel: Model<ApiKeyDocument, ApiKeyStaticMethods>,
 ) => {
 	try {
 		if (!req.cookies.acToken) {
@@ -176,6 +187,8 @@ export const revokeApiKeyController = async (
 	req: Request,
 	res: Response,
 	next: NextFunction,
+	userModel: Model<UserDocument, UserStaticMethods>,
+	apiKeyModel: Model<ApiKeyDocument, ApiKeyStaticMethods>,
 ) => {
 	try {
 		const { keyId } = req.params;
@@ -197,7 +210,10 @@ export const revokeApiKeyController = async (
 		) as JwtPayload;
 
 		const userId = decoded.id;
-		const apiKey = await apiKeyModel.findOne({ _id: keyId, userId });
+		const apiKey: ApiKeyDocument | null = await apiKeyModel.findOne({
+			_id: keyId,
+			userId,
+		});
 
 		if (!apiKey) {
 			return res.status(404).json(standardResponse(false, "API key not found"));
@@ -217,6 +233,8 @@ export const deleteApiKeyController = async (
 	req: Request,
 	res: Response,
 	next: NextFunction,
+	userModel: Model<UserDocument, UserStaticMethods>,
+	apiKeyModel: Model<ApiKeyDocument, ApiKeyStaticMethods>,
 ) => {
 	try {
 		const { keyId } = req.params;
@@ -254,6 +272,8 @@ export const updateApiKeyController = async (
 	req: Request,
 	res: Response,
 	next: NextFunction,
+	userModel: Model<UserDocument, UserStaticMethods>,
+	apiKeyModel: Model<ApiKeyDocument, ApiKeyStaticMethods>,
 ) => {
 	try {
 		const { keyId, keyUpdatesDetails }: z.infer<typeof updateApiKeySchema> =
@@ -305,6 +325,8 @@ export const updateApiKeyNameController = async (
 	req: Request,
 	res: Response,
 	next: NextFunction,
+	userModel: Model<UserDocument, UserStaticMethods>,
+	apiKeyModel: Model<ApiKeyDocument, ApiKeyStaticMethods>,
 ) => {
 	try {
 		const { keyId, newName }: z.infer<typeof updateApiNameSchema> = req.body;
@@ -352,6 +374,8 @@ export const updateApiKeyScopesController = async (
 	req: Request,
 	res: Response,
 	next: NextFunction,
+	userModel: Model<UserDocument, UserStaticMethods>,
+	apiKeyModel: Model<ApiKeyDocument, ApiKeyStaticMethods>,
 ) => {
 	try {
 		const { keyId, newScopes }: z.infer<typeof updateApiScopesSchema> =
@@ -400,6 +424,8 @@ export const updateApiKeyIPWhiteListController = async (
 	req: Request,
 	res: Response,
 	next: NextFunction,
+	userModel: Model<UserDocument, UserStaticMethods>,
+	apiKeyModel: Model<ApiKeyDocument, ApiKeyStaticMethods>,
 ) => {
 	try {
 		const { keyId, newIPs }: z.infer<typeof updateApiIPWhiteListSchema> =
