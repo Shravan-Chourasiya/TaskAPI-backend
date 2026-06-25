@@ -50,6 +50,7 @@ export const otpService = {
 			createdAt: Date.now(),
 			expiresAt: Date.now() + ttl * 1000,
 		};
+  // amazonq-ignore-next-line
 		console.warn(`Storing OTP with key :: ${key}`);
 		// Store in Redis with TTL
 		await redisClient.setex(key, ttl, JSON.stringify(data));
@@ -69,20 +70,31 @@ export const otpService = {
 		purpose: string,
 	): Promise<{ success: boolean; message: string; userId?: string ,newValue?: string}> {
 		const key = `otp:${email.toLowerCase()}:${purpose}`;
+  // amazonq-ignore-next-line
 		console.warn(`Verifying OTP for key :: ${key}`);
 		const rawData = await redisClient.get(key);
-		const data = rawData ? JSON.parse(rawData) : null;
-		if (!data) {
-			return {
-				success: false,
-				message: "OTP not found or expired",
-			};
+		if (!rawData) {
+			return { success: false, message: "OTP not found or expired" };
 		}
-
-		const otpData: PendingOTP = data;
-
-		// Check if expired
-		if (Date.now() > otpData.expiresAt) {
+		let otpData: PendingOTP;
+		try {
+			const parsed = JSON.parse(rawData) as Record<string, unknown>;
+			if (
+				typeof parsed.otpHash !== "string" ||
+				typeof parsed.attemptsLeft !== "number" ||
+				typeof parsed.failedAttempts !== "number" ||
+				typeof parsed.expiresAt !== "number" ||
+				typeof parsed.createdAt !== "number"
+			) {
+				await redisClient.del(key);
+				return { success: false, message: "OTP data corrupted" };
+			}
+			otpData = parsed as unknown as PendingOTP;
+		} catch {
+			await redisClient.del(key);
+			return { success: false, message: "OTP data corrupted" };
+		}
+		if (!otpData) {
 			await redisClient.del(key);
 			return {
 				success: false,

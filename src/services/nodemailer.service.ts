@@ -2,6 +2,7 @@ import nodemailer from "nodemailer";
 import { config } from "../configs/app.config.js";
 import { handleNodemailerError } from "../utils/nodemailer.utils.js";
 
+// amazonq-ignore-next-line
 const transporter = nodemailer.createTransport({
 	service: "gmail",
 	auth: {

@@ -3,6 +3,8 @@ export interface Config {
 	BASE_URL: string;
 	MONGO_URI: string;
 	DB_NAME: string;
+	CLIENT_MONGO_DB_URI: string;
+	CLIENT_DB_NAME: string;
 	POSTGRES_DB_URI: string;
 	REFRESH_TOKEN_JWT_SECRET: string;
 	ACCESS_TOKEN_JWT_SECRET: string;

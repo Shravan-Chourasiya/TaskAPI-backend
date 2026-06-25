@@ -14,7 +14,7 @@ export function getPgDb() {
 		const poolConfig: PoolConfig = {
 			connectionString: config.POSTGRES_DB_URI,
 			ssl: {
-				rejectUnauthorized: false,
+				rejectUnauthorized: true,
 			},
 			max: 5,
 			idleTimeoutMillis: 10_000,
@@ -31,7 +31,13 @@ export function getPgDb() {
 export async function testPgConnection() {
 	const pgDb = getPgDb();
 	const result = await pgDb.execute("select 1");
-	return result;
+	if (result.rows.length > 0) {
+		console.log("PostgreSQL connection successful.");
+		return true;
+	} else {
+		console.error("Failed to connect to PostgreSQL.");
+		return false;
+	}
 }
 
 export function getPgPool() {

@@ -53,8 +53,8 @@ export type UserType = {
 	blackListedAt: Date;
 };
 
-// Instance methods interface
-export interface UserInstanceMethods {
+// Combined document type
+export interface UserDocument extends UserType, Document {
 	comparePassword(candidatePassword: string): Promise<boolean>;
 	isPasswordReused(newPassword: string): Promise<boolean>;
 	incrementFailedLogin(): Promise<void>;
@@ -65,9 +65,22 @@ export interface UserInstanceMethods {
 	generateVerificationToken(): string;
 }
 
+// Instance methods interface
+export type UserInstanceMethods = Pick<
+	UserDocument,
+	| "comparePassword"
+	| "isPasswordReused"
+	| "incrementFailedLogin"
+	| "resetFailedLogin"
+	| "updateLoginActivity"
+	| "softDelete"
+	| "restore"
+	| "generateVerificationToken"
+>;
+
 // Static methods interface
 export interface UserStaticMethods extends Model<
-	UserType,
+	UserDocument,
 	object,
 	UserInstanceMethods
 > {
@@ -83,8 +96,3 @@ export interface UserStaticMethods extends Model<
 		deleted: number;
 	}>;
 }
-
-// Combined document type
-export type UserDocument = Document<unknown, object, UserType> &
-	UserType &
-	UserInstanceMethods;
