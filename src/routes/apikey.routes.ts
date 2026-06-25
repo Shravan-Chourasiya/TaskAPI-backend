@@ -11,56 +11,111 @@ import { ZodValidatorMiddleware } from "../middlewares/zodvalidation.middleware.
 import * as apiKeyController from "../modules/auth/controllers/apikey.controller.js";
 import { Router } from "express";
 
-const router = Router();
+export function createApiKeyRouter({
+	userModel,
+	apiKeyModel,
+}: {
+	userModel: any;
+	apiKeyModel: any;
+}): Router {
+	const router = Router();
 
-router.post(
-	"/create/apikey",
-	apiCreationLimiter,
-	ZodValidatorMiddleware(apiKeyCreationSchema),
-	apiKeyController.createApiKeyController,
-);
+	router.post(
+		"/create/apikey",
+		apiCreationLimiter,
+		ZodValidatorMiddleware(apiKeyCreationSchema),
+		(req, res, next) =>
+			apiKeyController.createApiKeyController(
+				req,
+				res,
+				next,
+				userModel,
+				apiKeyModel,
+			),
+	);
 
-router.get(
-	"/list/apikeys",
-	generalApiKeyLimiter,
-	apiKeyController.listApiKeysController,
-);
+	router.get("/list/apikeys", generalApiKeyLimiter, (req, res, next) =>
+		apiKeyController.listApiKeysController(
+			req,
+			res,
+			next,
+			userModel,
+			apiKeyModel,
+		),
+	);
 
-router.post(
-	"/revoke/:keyId",
-	generalApiKeyLimiter,
-	apiKeyController.revokeApiKeyController,
-);
+	router.post("/revoke/:keyId", generalApiKeyLimiter, (req, res, next) =>
+		apiKeyController.revokeApiKeyController(
+			req,
+			res,
+			next,
+			userModel,
+			apiKeyModel,
+		),
+	);
 
-router.patch(
-	"/update",
-	apiKeyUpdateLimiter,
-	ZodValidatorMiddleware(updateApiKeySchema),
-	apiKeyController.updateApiKeyController,
-);
-router.patch(
-	"/update/name",
-	apiKeyUpdateLimiter,
-	ZodValidatorMiddleware(updateApiKeySchema),
-	apiKeyController.updateApiKeyNameController,
-);
-router.patch(
-	"/update/scopes",
-	apiKeyUpdateLimiter,
-	ZodValidatorMiddleware(updateApiKeySchema),
-	apiKeyController.updateApiKeyScopesController,
-);
-router.patch(
-	"/update/ips",
-	apiKeyUpdateLimiter,
-	ZodValidatorMiddleware(updateApiKeySchema),
-	apiKeyController.updateApiKeyIPWhiteListController,
-);
+	router.patch(
+		"/update",
+		apiKeyUpdateLimiter,
+		ZodValidatorMiddleware(updateApiKeySchema),
+		(req, res, next) =>
+			apiKeyController.updateApiKeyController(
+				req,
+				res,
+				next,
+				userModel,
+				apiKeyModel,
+			),
+	);
+	router.patch(
+		"/update/name",
+		apiKeyUpdateLimiter,
+		ZodValidatorMiddleware(updateApiKeySchema),
+		(req, res, next) =>
+			apiKeyController.updateApiKeyNameController(
+				req,
+				res,
+				next,
+				userModel,
+				apiKeyModel,
+			),
+	);
+	router.patch(
+		"/update/scopes",
+		apiKeyUpdateLimiter,
+		ZodValidatorMiddleware(updateApiKeySchema),
+		(req, res, next) =>
+			apiKeyController.updateApiKeyScopesController(
+				req,
+				res,
+				next,
+				userModel,
+				apiKeyModel,
+			),
+	);
+	router.patch(
+		"/update/ips",
+		apiKeyUpdateLimiter,
+		ZodValidatorMiddleware(updateApiKeySchema),
+		(req, res, next) =>
+			apiKeyController.updateApiKeyIPWhiteListController(
+				req,
+				res,
+				next,
+				userModel,
+				apiKeyModel,
+			),
+	);
 
-router.delete(
-	"/delete/:keyId",
-	generalApiKeyLimiter,
-	apiKeyController.deleteApiKeyController,
-);
+	router.delete("/delete/:keyId", generalApiKeyLimiter, (req, res, next) =>
+		apiKeyController.deleteApiKeyController(
+			req,
+			res,
+			next,
+			userModel,
+			apiKeyModel,
+		),
+	);
 
-export { router as apiKeyRouter };
+	return router;
+}

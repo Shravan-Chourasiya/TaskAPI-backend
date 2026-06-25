@@ -1,12 +1,44 @@
-import express from 'express';
-import * as subscriptionControllers from '../modules/auth/controllers/subscription.controller.js';
-import { accessTokenHandler } from '../middlewares/tokenhandler.middleware.js';
+import express from "express";
+import * as subscriptionControllers from "../modules/auth/controllers/subscription.controller.js";
+import { accessTokenHandlerFunction } from "../middlewares/tokenhandler.middleware.js";
+import { createMiddlewareWrapper } from "../utils/middlewareWrapper.js";
+import { asyncErrorHandler } from "../utils/asynchandler.utils.js";
 
-const router = express.Router();
+export function createSubscriptionRouter({
+	userModel,
+	subscriptionModel,
+	sessionModel,
+}: {
+	userModel: any;
+	subscriptionModel: any;
+	sessionModel: any;
+}): express.Router {
+	const accessTokenHandler = createMiddlewareWrapper(
+		sessionModel,
+		accessTokenHandlerFunction,
+		asyncErrorHandler,
+	);
+	const router = express.Router();
 
-router.post('/create-order', accessTokenHandler, subscriptionControllers.buySubscriptionController);
-router.post('/verify-payment', accessTokenHandler, subscriptionControllers.verifySubscriptionPayment);
-router.post('/webhook', subscriptionControllers.razorpayWebhookHandler); // For auto-renewal
+	router.post("/create-order", accessTokenHandler, (req, res, next) =>
+		subscriptionControllers.buySubscriptionController(
+			req,
+			res,
+			next,
+			userModel,
+			subscriptionModel,
+		),
+	);
+	router.post("/verify-payment", accessTokenHandler, (req, res, next) =>
+		subscriptionControllers.verifySubscriptionPayment(
+			req,
+			res,
+			next,
+			userModel,
+			subscriptionModel,
+		),
+	);
+	router.post("/webhook", subscriptionControllers.razorpayWebhookHandler); // For auto-renewal
 
-
-export { router as subscriptionRouter };
+	return router;
+}
