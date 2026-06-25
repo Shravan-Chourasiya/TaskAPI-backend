@@ -1,5 +1,9 @@
 import mongoose from "mongoose";
-import type { SubscriptionType } from "../../../types/mongo_models/subscription.type.js";
+import type {
+	SubscriptionDocument,
+	SubscriptionStaticMethods,
+	SubscriptionType,
+} from "../../../types/mongo_models/subscription.type.js";
 import { SUBSCRIPTION_CONSTANTS } from "../../../constants.js";
 
 const subscriptionSchema = new mongoose.Schema(
@@ -16,7 +20,7 @@ const subscriptionSchema = new mongoose.Schema(
 			required: true,
 		},
 		subscriptionAmount: {
-			type:Number,
+			type: Number,
 			default: 0,
 			required: true,
 		},
@@ -26,7 +30,7 @@ const subscriptionSchema = new mongoose.Schema(
 		},
 		subscriptionStatus: {
 			type: String,
-			enum: ["Active", "Expired", "Cancelled", "Suspended","Pending"],
+			enum: ["Active", "Expired", "Cancelled", "Suspended", "Pending"],
 			default: "Pending",
 		},
 		subscriptionEndDate: {
@@ -43,30 +47,33 @@ const subscriptionSchema = new mongoose.Schema(
 		},
 		paymentMethod: {
 			type: String,
-			enum: ["card", "netbanking", "wallet", "upi"],
+			enum: ["card", "netbanking", "wallet", "upi", "free"],
 			required: false,
 		},
 		autoRenew: {
 			type: Boolean,
 			default: false,
 		},
-		transactionId: {
+		razorpayOrderId: {
 			type: String,
-			required: true,
-			unique: true,
+			default: null,
+			index: true,
 		},
 		transactionHistory: {
 			type: [
 				{
-					transactionId: { type: String, required: true },
-					razorPayID: { type: String, required: true },
+					razorpayOrderId: { type: String, required: true },
+					razorpayPaymentId: { type: String, default: "" },
 					amount: { type: Number, required: true },
 					date: { type: Date, required: true },
 					paymentMethod: {
 						type: String,
-						enum: ["card", "netbanking", "wallet", "upi"],
+						enum: ["card", "netbanking", "wallet", "upi", "free"],
 					},
-					paymentStatus: { type: String, enum: ["Completed", "Failed", "Pending"] },
+					paymentStatus: {
+						type: String,
+						enum: ["Completed", "Failed", "Pending"],
+					},
 				},
 			],
 			default: [],
@@ -81,15 +88,19 @@ subscriptionSchema.pre("save", function () {
 	if (this.isNew && !this.subscriptionEndDate) {
 		this.subscriptionEndDate = new Date(
 			this.lastSubscribedAt.getTime() +
-				this.subscriptionDurationMonths * SUBSCRIPTION_CONSTANTS.DAYS_PER_MONTH * 24 * 60 * 60 * 1000,
+				this.subscriptionDurationMonths *
+					SUBSCRIPTION_CONSTANTS.DAYS_PER_MONTH *
+					24 *
+					60 *
+					60 *
+					1000,
 		);
 	}
 });
 
 subscriptionSchema.index({ userId: 1 });
 subscriptionSchema.index({ subscriptionStatus: 1, subscriptionEndDate: 1 });
-subscriptionSchema.index({ "transactionHistory.transactionId": 1 });
-
+subscriptionSchema.index({ "transactionHistory.razorpayOrderId": 1 });
 
 // In subscription.schema.ts - comparePlans method
 subscriptionSchema.methods.comparePlans = function (
@@ -108,7 +119,9 @@ subscriptionSchema.methods.comparePlans = function (
 subscriptionSchema.set("toJSON", { virtuals: true });
 subscriptionSchema.set("toObject", { virtuals: true });
 
-export const SubscriptionModel = mongoose.model<SubscriptionType>(
-	"Subscription",
-	subscriptionSchema,
-);
+export function initSubscriptionModel(TaskapiDb: mongoose.Connection) {
+	return TaskapiDb.model<SubscriptionDocument, SubscriptionStaticMethods>(
+		"Subscription",
+		subscriptionSchema,
+	);
+}

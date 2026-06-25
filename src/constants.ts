@@ -85,7 +85,7 @@ export const USER_LIMITS = {
 } as const;
 
 // ============ REDIS PREFIXES ============
-export const REDIS_PREFIXES = {
+export const APP_REDIS_PREFIXES = {
 	RATE_LIMIT_GENERAL_API: "rl:general:api:",
 	RATE_LIMIT_AUTH: "rl:auth:",
 	RATE_LIMIT_OTP_GENERATION: "rl:otp:generation:",
@@ -97,6 +97,16 @@ export const REDIS_PREFIXES = {
 	RATE_LIMIT_APIKEY_USAGE: "rl:apikey:usage:",
 	OTP_STORAGE: "otp:",
 	SESSION: "session:",
+} as const;
+
+export const CLIENT_REDIS_PREFIXES = {
+	RATE_LIMIT_GENERAL_API: "rl:client:general:api:",
+	RATE_LIMIT_AUTH: "rl:client:auth:",
+	RATE_LIMIT_OTP_GENERATION: "rl:client:otp:generation:",
+	RATE_LIMIT_OTP_VERIFICATION: "rl:client:otp:verification:",
+	RATE_LIMIT_PROFILE_UPDATE: "rl:client:profile:update:",
+	OTP_STORAGE: "client:otp:",
+	SESSION: "client:session:",
 } as const;
 
 export default contants;
