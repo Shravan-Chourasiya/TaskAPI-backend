@@ -3,8 +3,14 @@ import jwt, { type JwtPayload } from "jsonwebtoken";
 import { config } from "../configs/app.config.js";
 import bcrypt from "bcryptjs";
 import { tokenMiddlewareResponse } from "../utils/apiResponse.utils.js";
-import { UserDocument, UserStaticMethods } from "../types/mongo_models/user.type.js";
-import { SessionDocument, SessionStaticMethods } from "../types/mongo_models/session.type.js";
+import {
+	UserDocument,
+	UserStaticMethods,
+} from "../types/mongoModels/user.type.js";
+import {
+	SessionDocument,
+	SessionStaticMethods,
+} from "../types/mongoModels/session.type.js";
 
 type RequestWithUser = Request & {
 	userID?: string;

@@ -1,8 +1,10 @@
 import { Request, Response, NextFunction } from "express";
-import { Model } from "mongoose";
 import bcrypt from "bcryptjs";
 import { standardResponse } from "../utils/apiResponse.utils.js";
-import { ApiKeyDocument, ApiKeyStaticMethods } from "../types/mongo_models/apikeys.type.js";
+import {
+	ApiKeyDocument,
+	ApiKeyStaticMethods,
+} from "../types/mongoModels/apikeys.type.js";
 
 type RequestWithApiOwner = Request & {
 	apiOwnerId?: string;
@@ -12,7 +14,7 @@ export const apikeyHandlerFunction = async (
 	req: RequestWithApiOwner,
 	res: Response,
 	next: NextFunction,
-	apiKeyModel: Model<ApiKeyDocument, ApiKeyStaticMethods>,
+	apiKeyModel: ApiKeyStaticMethods,
 ) => {
 	const apiKey = req.headers["x-api-key"] as string | undefined;
 
@@ -37,7 +39,9 @@ export const apikeyHandlerFunction = async (
 	if (!apiKeyDoc) {
 		return res
 			.status(401)
-			.json(standardResponse(false, "Unauthorized: Invalid or revoked API key"));
+			.json(
+				standardResponse(false, "Unauthorized: Invalid or revoked API key"),
+			);
 	}
 
 	// Check expiry
