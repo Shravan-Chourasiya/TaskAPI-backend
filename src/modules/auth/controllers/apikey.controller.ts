@@ -17,11 +17,11 @@ import { Model } from "mongoose";
 import {
 	ApiKeyDocument,
 	ApiKeyStaticMethods,
-} from "../../../types/mongo_models/apikeys.type.js";
+} from "../../../types/mongoModels/apikeys.type.js";
 import {
 	UserDocument,
 	UserStaticMethods,
-} from "../../../types/mongo_models/user.type.js";
+} from "../../../types/mongoModels/user.type.js";
 
 export const createApiKeyController = async (
 	req: Request,

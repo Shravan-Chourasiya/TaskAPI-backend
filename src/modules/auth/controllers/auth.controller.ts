@@ -24,11 +24,11 @@ import { v4 as uuidv4 } from "uuid";
 import {
 	UserDocument,
 	UserStaticMethods,
-} from "../../../types/mongo_models/user.type.js";
+} from "../../../types/mongoModels/user.type.js";
 import {
 	SessionDocument,
 	SessionStaticMethods,
-} from "../../../types/mongo_models/session.type.js";
+} from "../../../types/mongoModels/session.type.js";
 import { Model } from "mongoose";
 
 export async function registerController(

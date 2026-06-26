@@ -16,11 +16,11 @@ import { Model } from "mongoose";
 import {
 	SubscriptionDocument,
 	SubscriptionStaticMethods,
-} from "../../../types/mongo_models/subscription.type.js";
+} from "../../../types/mongoModels/subscription.type.js";
 import {
 	UserDocument,
 	UserStaticMethods,
-} from "../../../types/mongo_models/user.type.js";
+} from "../../../types/mongoModels/user.type.js";
 
 const freePlanBuyController = async (
 	req: Request,
@@ -93,7 +93,13 @@ const freePlanBuyController = async (
 			const updated = await subscriptionModel.findOne({ userId });
 			return res
 				.status(200)
-				.json(standardResponse(true, "Free subscription activated successfully", updated));
+				.json(
+					standardResponse(
+						true,
+						"Free subscription activated successfully",
+						updated,
+					),
+				);
 		} else {
 			const newSubscription = await subscriptionModel.create({
 				userId,
@@ -124,7 +130,13 @@ const freePlanBuyController = async (
 			});
 			return res
 				.status(201)
-				.json(standardResponse(true, "Free subscription activated successfully", newSubscription));
+				.json(
+					standardResponse(
+						true,
+						"Free subscription activated successfully",
+						newSubscription,
+					),
+				);
 		}
 	} catch (error) {
 		next(error);
@@ -153,15 +165,33 @@ export const buySubscriptionController = async (
 		}
 
 		if (subscriptionPlanDetails.planName === "Free") {
-			return await freePlanBuyController(req, res, next, userModel, subscriptionModel);
+			return await freePlanBuyController(
+				req,
+				res,
+				next,
+				userModel,
+				subscriptionModel,
+			);
 		}
 
 		if (!SUBSCRIPTION_PLANS[subscriptionPlanDetails.planName]) {
-			return res.status(400).json(standardResponse(false, "Invalid subscription plan"));
+			return res
+				.status(400)
+				.json(standardResponse(false, "Invalid subscription plan"));
 		}
 
-		if (SUBSCRIPTION_PLANS[subscriptionPlanDetails.planName].price !== subscriptionPlanDetails.price) {
-			return res.status(400).json(standardResponse(false, "Price mismatch for the selected subscription plan"));
+		if (
+			SUBSCRIPTION_PLANS[subscriptionPlanDetails.planName].price !==
+			subscriptionPlanDetails.price
+		) {
+			return res
+				.status(400)
+				.json(
+					standardResponse(
+						false,
+						"Price mismatch for the selected subscription plan",
+					),
+				);
 		}
 
 		const existingSubscription: SubscriptionDocument | null =
@@ -171,18 +201,24 @@ export const buySubscriptionController = async (
 			existingSubscription?.subscriptionStatus === "Active" &&
 			new Date() < existingSubscription?.subscriptionEndDate;
 
-		const isUpgrade = existingSubscription?.comparePlans(subscriptionPlanDetails.planName);
-		const isSamePlan = existingSubscription?.subscriptionType === subscriptionPlanDetails.planName;
+		const isUpgrade = existingSubscription?.comparePlans(
+			subscriptionPlanDetails.planName,
+		);
+		const isSamePlan =
+			existingSubscription?.subscriptionType ===
+			subscriptionPlanDetails.planName;
 
 		if (isActive && !isUpgrade) {
-			return res.status(400).json(
-				standardResponse(
-					false,
-					isSamePlan
-						? "You already have an active subscription for this plan"
-						: "Cannot downgrade while subscription is active",
-				),
-			);
+			return res
+				.status(400)
+				.json(
+					standardResponse(
+						false,
+						isSamePlan
+							? "You already have an active subscription for this plan"
+							: "Cannot downgrade while subscription is active",
+					),
+				);
 		}
 
 		// Create Razorpay order — receipt is just metadata, not used for DB lookup
@@ -193,7 +229,9 @@ export const buySubscriptionController = async (
 		);
 
 		if (!razorpayOrder) {
-			return res.status(500).json(standardResponse(false, "Failed to create Razorpay order"));
+			return res
+				.status(500)
+				.json(standardResponse(false, "Failed to create Razorpay order"));
 		}
 
 		// Store razorpayOrder.id (order_xxx) as the key for later verification lookup
@@ -240,9 +278,11 @@ export const buySubscriptionController = async (
 			});
 		}
 
-		return res.status(200).json(
-			standardResponse(true, "Order created successfully", { razorpayOrder }),
-		);
+		return res
+			.status(200)
+			.json(
+				standardResponse(true, "Order created successfully", { razorpayOrder }),
+			);
 	} catch (error) {
 		next(error);
 	}
@@ -258,8 +298,20 @@ export const verifySubscriptionPayment = async (
 	try {
 		const { razorpayOrderId, razorpayPaymentId, razorpaySignature } = req.body;
 
-		if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature || !req.cookies.acToken) {
-			return res.status(400).json(standardResponse(false, "Missing required payment verification fields"));
+		if (
+			!razorpayOrderId ||
+			!razorpayPaymentId ||
+			!razorpaySignature ||
+			!req.cookies.acToken
+		) {
+			return res
+				.status(400)
+				.json(
+					standardResponse(
+						false,
+						"Missing required payment verification fields",
+					),
+				);
 		}
 
 		// Validate formats before using in security decision
@@ -272,7 +324,9 @@ export const verifySubscriptionPayment = async (
 			!PAYMENT_ID_RE.test(razorpayPaymentId) ||
 			!SIGNATURE_RE.test(razorpaySignature)
 		) {
-			return res.status(400).json(standardResponse(false, "Invalid payment field format"));
+			return res
+				.status(400)
+				.json(standardResponse(false, "Invalid payment field format"));
 		}
 
 		const decoded = jwt.verify(
@@ -286,18 +340,27 @@ export const verifySubscriptionPayment = async (
 		}
 
 		// Verify Razorpay signature
-		const isValid = verifyRazorpaySignature(razorpayOrderId, razorpayPaymentId, razorpaySignature);
+		const isValid = verifyRazorpaySignature(
+			razorpayOrderId,
+			razorpayPaymentId,
+			razorpaySignature,
+		);
 		if (!isValid) {
-			return res.status(400).json(standardResponse(false, "Invalid payment signature"));
+			return res
+				.status(400)
+				.json(standardResponse(false, "Invalid payment signature"));
 		}
 
 		// Look up subscription directly by razorpayOrderId
-		const subscription: SubscriptionDocument | null = await subscriptionModel.findOne({
-			razorpayOrderId,
-		});
+		const subscription: SubscriptionDocument | null =
+			await subscriptionModel.findOne({
+				razorpayOrderId,
+			});
 
 		if (!subscription) {
-			return res.status(404).json(standardResponse(false, "Subscription not found"));
+			return res
+				.status(404)
+				.json(standardResponse(false, "Subscription not found"));
 		}
 
 		// Find the pending transaction in history
@@ -306,14 +369,24 @@ export const verifySubscriptionPayment = async (
 		);
 
 		if (!transaction) {
-			return res.status(404).json(standardResponse(false, "Transaction not found in subscription history"));
+			return res
+				.status(404)
+				.json(
+					standardResponse(
+						false,
+						"Transaction not found in subscription history",
+					),
+				);
 		}
 
 		const endDate = new Date(
 			Date.now() +
 				subscription.subscriptionDurationMonths *
 					SUBSCRIPTION_CONSTANTS.DAYS_PER_MONTH *
-					24 * 60 * 60 * 1000,
+					24 *
+					60 *
+					60 *
+					1000,
 		);
 
 		subscription.subscriptionStatus = "Active";
@@ -347,7 +420,9 @@ export const razorpayWebhookHandler = async (
 	try {
 		const secret = req.body.secret;
 		if (!secret) {
-			return res.status(401).json(standardResponse(false, "Unauthorized: Missing webhook secret"));
+			return res
+				.status(401)
+				.json(standardResponse(false, "Unauthorized: Missing webhook secret"));
 		}
 		return res.status(200).json(standardResponse(true, "Webhook received"));
 	} catch (error) {

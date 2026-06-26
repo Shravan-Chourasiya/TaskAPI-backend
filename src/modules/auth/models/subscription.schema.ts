@@ -3,7 +3,7 @@ import type {
 	SubscriptionDocument,
 	SubscriptionStaticMethods,
 	SubscriptionType,
-} from "../../../types/mongo_models/subscription.type.js";
+} from "../../../types/mongoModels/subscription.type.js";
 import { SUBSCRIPTION_CONSTANTS } from "../../../constants.js";
 
 const subscriptionSchema = new mongoose.Schema(

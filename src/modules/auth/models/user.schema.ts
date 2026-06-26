@@ -3,7 +3,7 @@ import type {
 	UserDocument,
 	UserType,
 	UserStaticMethods,
-} from "../../../types/mongo_models/user.type.js";
+} from "../../../types/mongoModels/user.type.js";
 import * as crypto from "crypto";
 import * as bcrypt from "bcryptjs";
 import { AUTH_CONSTANTS, USER_LIMITS } from "../../../constants.js";

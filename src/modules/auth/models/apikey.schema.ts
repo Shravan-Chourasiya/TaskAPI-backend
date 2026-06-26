@@ -3,7 +3,7 @@ import type {
 	ApiKeyDocument,
 	ApiKeyType,
 	ApiKeyStaticMethods,
-} from "../../../types/mongo_models/apikeys.type.js";
+} from "../../../types/mongoModels/apikeys.type.js";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import { AUTH_CONSTANTS } from "../../../constants.js";

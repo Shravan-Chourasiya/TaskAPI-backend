@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 import type {
 	SessionType,
 	SessionStaticMethods,
-} from "../../../types/mongo_models/session.type.js";
+} from "../../../types/mongoModels/session.type.js";
 import { AUTH_CONSTANTS } from "../../../constants.js";
 
 export const sessionSchema = new mongoose.Schema(
@@ -20,16 +20,22 @@ export const sessionSchema = new mongoose.Schema(
 			index: true,
 		},
 
-		activeSessionCount:{
-			type:Number,
-			default:0,
-			max:[AUTH_CONSTANTS.MAX_ACTIVE_SESSIONS,"Cannot have more than 5 concurrent devices"]
+		activeSessionCount: {
+			type: Number,
+			default: 0,
+			max: [
+				AUTH_CONSTANTS.MAX_ACTIVE_SESSIONS,
+				"Cannot have more than 5 concurrent devices",
+			],
 		},
 
 		sessionDevices: {
 			type: [String],
 			default: [],
-			max: [AUTH_CONSTANTS.MAX_ACTIVE_SESSIONS, "Cannot have more than 5 concurrent devices"],
+			max: [
+				AUTH_CONSTANTS.MAX_ACTIVE_SESSIONS,
+				"Cannot have more than 5 concurrent devices",
+			],
 		},
 
 		userAgent: {
@@ -146,7 +152,6 @@ sessionSchema.pre("save", function () {
 	}
 });
 
-
 // ============ INSTANCE METHODS ============
 
 /**
@@ -168,7 +173,6 @@ sessionSchema.methods.updateActivity = async function (): Promise<void> {
 	this.lastActivityAt = new Date();
 	await this.save();
 };
-
 
 /**
  * Check if session is valid (active, not revoked, and not expired).
@@ -241,12 +245,9 @@ sessionSchema.statics.countActiveSessions = function (userId: string) {
 	});
 };
 
-
-
 export function initSessionModel(TaskapiDb: mongoose.Connection) {
 	return TaskapiDb.model<SessionType, SessionStaticMethods>(
 		"Sessions",
 		sessionSchema,
 	);
 }
-

@@ -16,7 +16,7 @@ import { Model } from "mongoose";
 import {
 	UserDocument,
 	UserStaticMethods,
-} from "../types/mongo_models/user.type.js";
+} from "../types/mongoModels/user.type.js";
 
 export const isUserController = async (
 	req: Request,
@@ -26,7 +26,7 @@ export const isUserController = async (
 ) => {
 	try {
 		// This endpoint is protected by accessTokenHandler, so if we reach here, the user is verified
-  // amazonq-ignore-next-line
+		// amazonq-ignore-next-line
 		const decoded = jwt.verify(
 			req.cookies.acToken,
 			config.ACCESS_TOKEN_JWT_SECRET,
@@ -122,9 +122,9 @@ export const checkUsernameController = async (
 	userModel: Model<UserDocument, UserStaticMethods>,
 ) => {
 	try {
-  // amazonq-ignore-next-line
+		// amazonq-ignore-next-line
 		const { username } = req.query;
-  // amazonq-ignore-next-line
+		// amazonq-ignore-next-line
 		console.log(username, typeof username);
 		if (!username || typeof username !== "string") {
 			return res
