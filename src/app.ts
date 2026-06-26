@@ -9,10 +9,12 @@ import { apiRateLimiter } from "./middlewares/ratelimiting.middleware.js";
 import { createSubscriptionRouter } from "./routes/subscription.routes.js";
 import { createGeneralRouter } from "./routes/general.routes.js";
 import { createApiKeyRouter } from "./routes/apikey.routes.js";
+import {createClientUserRouter} from "./routes/clientUser.routes.js";
 import { initUserModel } from "./modules/auth/models/user.schema.js";
 import { initSessionModel } from "./modules/auth/models/session.schema.js";
 import { initApiKeyModel } from "./modules/auth/models/apikey.schema.js";
 import { initSubscriptionModel } from "./modules/auth/models/subscription.schema.js";
+import { initClientUsersStoreModel } from "./modules/clientauth/schemas/userMongo.schema.js";
 
 const app = express();
 
@@ -29,6 +31,7 @@ const userModel = initUserModel(TaskapiDb);
 const sessionModel = initSessionModel(TaskapiDb);
 const apiKeyModel = initApiKeyModel(TaskapiDb);
 const subscriptionModel = initSubscriptionModel(TaskapiDb);
+const clientUsersStoreModel=initClientUsersStoreModel(TaskapiClientsDb);
 const authRouter: express.Router = createAuthRouter({
 	userModel,
 	sessionModel,
@@ -43,6 +46,11 @@ const apiKeyRouter: express.Router = createApiKeyRouter({
 	userModel,
 	apiKeyModel,
 });
+const clientUserRouter: express.Router = createClientUserRouter({
+	storeModel: clientUsersStoreModel,
+	apiKeyModel
+});
+
 
 const corsOptions = {
 	origin: config.ALLOWED_ORIGINS,
@@ -59,5 +67,6 @@ app.use("/api/v1/auth", apiRateLimiter, authRouter);
 app.use("/api/v1/", apiRateLimiter, generalRouter);
 app.use("/api/v1/subscription", apiRateLimiter, subscriptionRouter);
 app.use("/api/v1/api-keys", apiRateLimiter, apiKeyRouter);
+app.use("/api/v1/client/auth", apiRateLimiter, clientUserRouter);
 
 export { app };
