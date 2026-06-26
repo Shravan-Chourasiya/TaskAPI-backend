@@ -44,12 +44,10 @@ export const LogoutSchema = z.object({
 export const VerifyOTPSchema = z.object({
 	email: emailSchema,
 	otp: z.string().length(6, "OTP must be exactly 6 digits").regex(/^\d{6}$/, "OTP must be numeric"),
-	purpose: z.enum(["verifyEmail", "resetPassword", "accountRecovery"]),
 });
 
 export const ResendOTPSchema = z.object({
 	email: emailSchema,
-	purpose: z.enum(["verifyEmail", "resetPassword", "accountRecovery"]),
 });
 
 // ─── Password Schemas ─────────────────────────────────────────────────────────

@@ -10,10 +10,10 @@ import { CLIENT_REDIS_PREFIXES } from "../../../constants.js";
 
 const hashValue = (value: string): string =>
 	crypto
-		.createHash("sha256")
+		.createHash("sha3-256")
 		.update(value.toLowerCase())
 		.digest("hex")
-		.substring(0, 16);
+		.substring(0, 32);
 
 const sendCommand: SendCommandFn = (command: string, ...args: string[]) =>
 	redisClient.call(command, ...args) as Promise<RedisReply>;
