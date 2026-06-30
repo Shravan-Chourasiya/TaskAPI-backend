@@ -1,19 +1,28 @@
 import mongoose from "mongoose";
 import { USER_LIMITS } from "../../../constants.js";
 import type {
-	ClientUsersStoreType,
-	ClientUsersStoreDocument,
-	ClientUsersStoreStaticMethods,
-	ClientUser,
+	ClientUserDocument,
+	ClientUserStaticMethods,
 } from "../types/userMongo.type.js";
-export { hashEmail, clientUserUtils } from "../utils/clientUserUtils.js";
+export { clientUserUtils } from "../utils/clientUserUtils.js";
 
-// ─── Embedded user schema (used as Map value type definition only) ─────────────
+// ─── Flat per-user schema (one document = one end-user) ───────────────────────
 
-const clientUserSubSchema = new mongoose.Schema(
+const clientUserSchema = new mongoose.Schema(
 	{
-		userId: { type: String, required: true },
-		email: { type: String, required: true, lowercase: true, trim: true },
+		// ── Tenant identity ───────────────────────────────────────────────────────
+		clientId: {
+			type: String,
+			required: [true, "Client ID is required"],
+		},
+
+		// ── User identity ─────────────────────────────────────────────────────────
+		email: {
+			type: String,
+			required: true,
+			lowercase: true,
+			trim: true,
+		},
 		username: {
 			type: String,
 			trim: true,
@@ -25,6 +34,8 @@ const clientUserSubSchema = new mongoose.Schema(
 				"Username can only contain lowercase letters, numbers, and underscores",
 			],
 		},
+
+		// ── Auth ──────────────────────────────────────────────────────────────────
 		passwordHash: { type: String, select: false },
 		lastPassword: { type: String, select: false },
 		lastPasswordChangedAt: Date,
@@ -36,6 +47,8 @@ const clientUserSubSchema = new mongoose.Schema(
 		authProviderId: String,
 		emailVerified: { type: Boolean, default: false },
 		verifiedAt: Date,
+
+		// ── Profile ───────────────────────────────────────────────────────────────
 		profile: {
 			firstName: {
 				type: String,
@@ -55,6 +68,8 @@ const clientUserSubSchema = new mongoose.Schema(
 				match: [/^\+?[1-9]\d{1,14}$/, "Invalid phone number format"],
 			},
 		},
+
+		// ── Access control ────────────────────────────────────────────────────────
 		role: {
 			type: String,
 			enum: ["admin", "moderator", "user"],
@@ -62,16 +77,11 @@ const clientUserSubSchema = new mongoose.Schema(
 		},
 		status: {
 			type: String,
-			enum: [
-				"active",
-				"inactive",
-				"suspended",
-				"pending",
-				"deleted",
-				"blacklisted",
-			],
+			enum: ["active", "inactive", "suspended", "pending", "deleted", "blacklisted"],
 			default: "pending",
 		},
+
+		// ── Security ──────────────────────────────────────────────────────────────
 		twoFactorEnabled: { type: Boolean, default: false },
 		twoFactorSecret: { type: String, select: false },
 		lastLoginAt: Date,
@@ -80,71 +90,68 @@ const clientUserSubSchema = new mongoose.Schema(
 		failedLoginAttempts: { type: Number, default: 0 },
 		accountLockedUntil: Date,
 		lastFailedLoginAt: Date,
+
+		// ── Soft delete ───────────────────────────────────────────────────────────
 		isDeleted: { type: Boolean, default: false },
 		deletedAt: Date,
+		// TTL index on this field — MongoDB auto-purges the document when this date passes
 		scheduledDeletionAt: Date,
 		blackListReason: String,
 		blackListedAt: Date,
 	},
-	{ _id: false, timestamps: true },
-);
-
-// ─── Top-level schema (one document per TaskAPI client) ───────────────────────
-
-const clientUsersStoreSchema = new mongoose.Schema(
-	{
-		clientId: {
-			type: String,
-			required: [true, "Client ID is required"],
-			unique: true,
-			index: true,
-		},
-		userCount: {
-			type: Number,
-			default: 0,
-		},
-		users: {
-			type: Map,
-			of: clientUserSubSchema,
-			default: {},
-		},
-	},
 	{
 		timestamps: true,
-		collection: "client_users_store",
+		collection: "client_users",
 	},
 );
 
-// ─── Static Methods ───────────────────────────────────────────────────────────
+// ─── Indexes ──────────────────────────────────────────────────────────────────
 
-clientUsersStoreSchema.statics.findStore = function (clientId: string) {
-	return this.findOne({ clientId });
+// Primary lookup: clientId + email — unique per tenant, used for register/login/OTP flows
+clientUserSchema.index({ clientId: 1, email: 1 }, { unique: true });
+
+// TTL: auto-purge soft-deleted users once scheduledDeletionAt is reached
+// sparse: true so documents without this field are ignored by the TTL worker
+clientUserSchema.index(
+	{ scheduledDeletionAt: 1 },
+	{ expireAfterSeconds: 0, sparse: true },
+);
+
+// Sparse index for lock queries — only indexes documents that have an active lock
+clientUserSchema.index({ accountLockedUntil: 1 }, { sparse: true });
+
+// ─── Static methods ───────────────────────────────────────────────────────────
+
+clientUserSchema.statics.findByEmail = function (
+	clientId: string,
+	email: string,
+) {
+	return this.findOne({ clientId, email: email.toLowerCase().trim() });
 };
 
-clientUsersStoreSchema.statics.getUser = async function (
+clientUserSchema.statics.findByDocId = function (
 	clientId: string,
-	emailHash: string,
-): Promise<ClientUser | null> {
-	const store = await this.findOne({ clientId }, { [`users.${emailHash}`]: 1 });
-	return store?.users?.get(emailHash) ?? null;
+	docId: string,
+) {
+	return this.findOne({ clientId, _id: docId });
 };
 
-clientUsersStoreSchema.statics.userExists = async function (
+clientUserSchema.statics.emailExists = async function (
 	clientId: string,
-	emailHash: string,
+	email: string,
 ): Promise<boolean> {
-	const count = await this.countDocuments({
-		clientId,
-		[`users.${emailHash}`]: { $exists: true },
-	});
-	return count > 0;
+	const doc = await this.findOne(
+		{ clientId, email: email.toLowerCase().trim() },
+		{ _id: 1 },
+	);
+	return doc !== null;
 };
 
-// ─── Model Factory ────────────────────────────────────────────────────────────
+// ─── Model factory ────────────────────────────────────────────────────────────
 
-export function initClientUsersStoreModel(db: mongoose.Connection) {
-	return db.model<ClientUsersStoreDocument, ClientUsersStoreStaticMethods>(
-		"ClientUsersStore",
-		clientUsersStoreSchema,
+export function initClientUserModel(db: mongoose.Connection) {
+	return db.model<ClientUserDocument, ClientUserStaticMethods>(
+		"ClientUser",
+		clientUserSchema,
 	);
 }

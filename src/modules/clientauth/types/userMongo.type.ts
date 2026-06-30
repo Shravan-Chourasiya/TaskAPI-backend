@@ -1,11 +1,14 @@
 import type mongoose from "mongoose";
 
-// ─── Embedded User Object (stored as map value) ───────────────────────────────
+// ─── Flat per-user document type ──────────────────────────────────────────────
 
 export type ClientUser = {
-	userId: string;                    // uuid generated on registration
+	// Tenant identity
+	clientId: string;                  // apiOwnerId from API key middleware
+	// User identity — _id (ObjectId) is the unique doc identity, no separate userId field
 	email: string;
 	username?: string;
+	// Auth
 	passwordHash?: string;
 	lastPassword?: string;
 	lastPasswordChangedAt?: Date;
@@ -13,6 +16,7 @@ export type ClientUser = {
 	authProviderId?: string;
 	emailVerified: boolean;
 	verifiedAt?: Date;
+	// Profile
 	profile: {
 		firstName?: string;
 		lastName?: string;
@@ -21,8 +25,10 @@ export type ClientUser = {
 		dateOfBirth?: Date;
 		phoneNumber?: string;
 	};
+	// Access control
 	role: "admin" | "moderator" | "user";
 	status: "active" | "inactive" | "suspended" | "pending" | "deleted" | "blacklisted";
+	// Security
 	twoFactorEnabled: boolean;
 	twoFactorSecret?: string;
 	lastLoginAt?: Date;
@@ -31,31 +37,30 @@ export type ClientUser = {
 	failedLoginAttempts: number;
 	accountLockedUntil?: Date;
 	lastFailedLoginAt?: Date;
+	// Soft delete
 	isDeleted: boolean;
 	deletedAt?: Date;
-	scheduledDeletionAt?: Date;
+	scheduledDeletionAt?: Date;     // TTL index target — MongoDB purges doc when this passes
 	blackListReason?: string;
 	blackListedAt?: Date;
+	// Timestamps (from mongoose { timestamps: true })
 	createdAt: Date;
 	updatedAt: Date;
 };
 
-// ─── Top-level Document (one per TaskAPI client) ──────────────────────────────
+// ─── Mongoose document type ───────────────────────────────────────────────────
 
-export type ClientUsersStoreType = {
-	clientId: string;                    // TaskAPI userId of the API key owner
-	userCount: number;                   // tracked to enforce plan limits
-	users: Map<string, ClientUser>;   // key = sha256(email).slice(0,16)
-};
+export type ClientUserDocument =
+	mongoose.Document<mongoose.Types.ObjectId, object, ClientUser> &
+	ClientUser;
 
-// ─── Static Methods ───────────────────────────────────────────────────────────
+// ─── Static methods ───────────────────────────────────────────────────────────
 
-export interface ClientUsersStoreStaticMethods extends mongoose.Model<ClientUsersStoreType> {
-	findStore(clientId: string): Promise<ClientUsersStoreDocument | null>;
-	getUser(clientId: string, emailHash: string): Promise<ClientUser | null>;
-	userExists(clientId: string, emailHash: string): Promise<boolean>;
+export interface ClientUserStaticMethods extends mongoose.Model<ClientUser> {
+	// Lookup by clientId + email (register, login, OTP flows)
+	findByEmail(clientId: string, email: string): mongoose.Query<ClientUserDocument | null, ClientUserDocument>;
+	// Lookup by clientId + _id (authenticated operations: update password, username, email, delete)
+	findByDocId(clientId: string, docId: string): mongoose.Query<ClientUserDocument | null, ClientUserDocument>;
+	// Existence check without loading the full document
+	emailExists(clientId: string, email: string): Promise<boolean>;
 }
-
-export type ClientUsersStoreDocument =
-	mongoose.Document<mongoose.Types.ObjectId, object, ClientUsersStoreType> &
-	ClientUsersStoreType;
