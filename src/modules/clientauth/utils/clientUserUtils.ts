@@ -1,17 +1,12 @@
 import bcrypt from "bcryptjs";
-import crypto from "crypto";
-import { v4 as uuidv4 } from "uuid";
 import { AUTH_CONSTANTS } from "../../../constants.js";
 import type { ClientUser } from "../types/userMongo.type.js";
 
-// ─── Email Hasher ─────────────────────────────────────────────────────────────
-
-export const hashEmail = (email: string): string =>
-	crypto
-		.createHash("sha3-256")
-		.update(email.toLowerCase().trim())
-		.digest("hex")
-		.slice(0, 32);
+// Strip sensitive fields before returning user data to client
+export const sanitizeUser = (user: ClientUser) => {
+	const { passwordHash, lastPassword, twoFactorSecret, ...safe } = user;
+	return safe;
+};
 
 // ─── User Utilities ───────────────────────────────────────────────────────────
 
@@ -41,16 +36,15 @@ export const clientUserUtils = {
 		user.failedLoginAttempts += 1;
 		user.lastFailedLoginAt = new Date();
 
-		if (user.failedLoginAttempts >= AUTH_CONSTANTS.FAILED_LOGIN_THRESHOLD_LOCK) {
-			user.accountLockedUntil = new Date(Date.now() + 15 * 60 * 1000);
-		}
-		if (user.failedLoginAttempts >= AUTH_CONSTANTS.FAILED_LOGIN_THRESHOLD_TEMP_LOCK) {
-			user.accountLockedUntil = new Date(Date.now() + 60 * 60 * 1000);
-		}
 		if (user.failedLoginAttempts >= AUTH_CONSTANTS.FAILED_LOGIN_THRESHOLD_PERM_LOCK) {
 			user.status = "suspended";
-			user.accountLockedUntil = new Date(Date.now() + 24 * 60 * 60 * 1000);
+			user.accountLockedUntil = new Date(Date.now() + AUTH_CONSTANTS.PERM_LOCK_DURATION_MS);
+		} else if (user.failedLoginAttempts >= AUTH_CONSTANTS.FAILED_LOGIN_THRESHOLD_TEMP_LOCK) {
+			user.accountLockedUntil = new Date(Date.now() + AUTH_CONSTANTS.TEMP_LOCK_DURATION_MS);
+		} else if (user.failedLoginAttempts >= AUTH_CONSTANTS.FAILED_LOGIN_THRESHOLD_LOCK) {
+			user.accountLockedUntil = new Date(Date.now() + AUTH_CONSTANTS.LOCK_DURATION_MS);
 		}
+		// below threshold — increment count only, no lock yet
 		return user;
 	},
 
@@ -94,16 +88,16 @@ export const clientUserUtils = {
 	},
 
 	createNewUser(data: {
+		clientId: string;
 		email: string;
 		passwordHash?: string;
 		username?: string;
 		authProvider?: ClientUser["authProvider"];
 		authProviderId?: string;
-	}): ClientUser {
-		const now = new Date();
-		const user: ClientUser = {
-			userId: uuidv4(),
-			email: data.email.toLowerCase(),
+	}): Omit<ClientUser, "createdAt" | "updatedAt"> {
+		const user: Omit<ClientUser, "createdAt" | "updatedAt"> = {
+			clientId: data.clientId,
+			email: data.email.toLowerCase().trim(),
 			authProvider: data.authProvider ?? "email",
 			emailVerified: false,
 			profile: {},
@@ -112,8 +106,6 @@ export const clientUserUtils = {
 			twoFactorEnabled: false,
 			failedLoginAttempts: 0,
 			isDeleted: false,
-			createdAt: now,
-			updatedAt: now,
 		};
 		if (data.username) user.username = data.username.toLowerCase();
 		if (data.passwordHash) user.passwordHash = data.passwordHash;
