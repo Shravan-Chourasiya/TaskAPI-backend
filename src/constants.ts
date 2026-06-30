@@ -30,9 +30,12 @@ export const AUTH_CONSTANTS = {
 	ACCESS_TOKEN_EXPIRY: "10m",
 	REFRESH_TOKEN_EXPIRY: "7d",
 	MAX_ACTIVE_SESSIONS: 5,
-	FAILED_LOGIN_THRESHOLD_LOCK: 5,
-	FAILED_LOGIN_THRESHOLD_TEMP_LOCK: 8,
-	FAILED_LOGIN_THRESHOLD_PERM_LOCK: 12,
+	FAILED_LOGIN_THRESHOLD_LOCK: 5,        // lock for LOCK_DURATION_MS
+	FAILED_LOGIN_THRESHOLD_TEMP_LOCK: 8,   // escalate to TEMP_LOCK_DURATION_MS
+	FAILED_LOGIN_THRESHOLD_PERM_LOCK: 12,  // escalate to PERM_LOCK_DURATION_MS + suspend
+	LOCK_DURATION_MS: 15 * 60 * 1000,      // 15 minutes
+	TEMP_LOCK_DURATION_MS: 60 * 60 * 1000, // 1 hour
+	PERM_LOCK_DURATION_MS: 24 * 60 * 60 * 1000, // 24 hours
 	BCRYPT_SALT_ROUNDS: 12,
 	OTP_LENGTH: 6,
 	OTP_EXPIRY_MINUTES: 10,
@@ -48,10 +51,10 @@ export const FILE_UPLOAD_CONSTANTS = {
 
 // ============ SUBSCRIPTION ============
 export const SUBSCRIPTION_PLANS = {
-	Free: { price: 0 },
-	Basic: { price: 5 },
-	Pro: { price: 15 },
-};
+	Free:  { price: 0,  duration: 12, autoRenew: false },
+	Basic: { price: 5,  duration: 12, autoRenew: true  },
+	Pro:   { price: 15, duration: 12, autoRenew: true  },
+} as const;
 
 export const SUBSCRIPTION_CONSTANTS = {
 	CURRENCY: "INR",
@@ -84,6 +87,21 @@ export const USER_LIMITS = {
 	NAME_MAX_LENGTH: 50,
 } as const;
 
+// ============ CLIENT OTP PURPOSES ============
+export const CLIENT_OTP_PURPOSES = {
+	VERIFY_EMAIL_REGISTER: "ve-em-or",   // verify email on registration
+	VERIFY_CURRENT_EMAIL:  "ve-em-cu",   // step 1 email update: confirm current email
+	VERIFY_NEW_EMAIL:      "ve-em-up",   // step 2 email update: verify new email
+	FORGOT_PASSWORD:       "fr-pa",      // forgot password OTP + reset
+	UPDATE_PASSWORD:       "up-pa",      // authenticated password update OTP
+	ACCOUNT_RECOVERY:      "ac-re",      // recover soft-deleted account
+} as const;
+
+export type ClientOtpPurpose = typeof CLIENT_OTP_PURPOSES[keyof typeof CLIENT_OTP_PURPOSES];
+
+// ============ CLIENT OTP TTL ============
+export const CLIENT_OTP_TTL_SECONDS = 600; // 10 minutes
+
 // ============ REDIS PREFIXES ============
 export const APP_REDIS_PREFIXES = {
 	RATE_LIMIT_GENERAL_API: "rl:general:api:",
@@ -108,5 +126,7 @@ export const CLIENT_REDIS_PREFIXES = {
 	OTP_STORAGE: "client:otp:",
 	SESSION: "client:session:",
 } as const;
+
+
 
 export default contants;
