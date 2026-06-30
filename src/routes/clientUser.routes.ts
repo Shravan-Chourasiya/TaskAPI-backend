@@ -14,26 +14,31 @@ import {
 import {
 	RegisterSchema,
 	LoginSchema,
-	VerifyOTPSchema,
 	ResendOTPSchema,
 	ForgotPasswordSchema,
 	UpdatePasswordSchema,
 	UpdateUsernameSchema,
 	UpdateEmailSchema,
 	DeleteAccountSchema,
+	RecoverAccountSchema,
+	VerifyEmailOnRegisterSchema,
+	VerifyNewEmailSchema,
+	VerifyForgotPasswordSchema,
+	VerifyUpdatePasswordSchema,
+	VerifyAccountRecoverySchema,
 } from "../modules/clientauth/utils/zodSchemas.js";
-import type { ClientUsersStoreStaticMethods } from "../modules/clientauth/types/userMongo.type.js";
-import { ApiKeyStaticMethods } from "../types/mongoModels/apikeys.type.js";
+import type { ClientUserStaticMethods } from "../modules/clientauth/types/userMongo.type.js";
+import type { ApiKeyStaticMethods } from "../types/mongoModels/apikeys.type.js";
+import { CLIENT_OTP_PURPOSES } from "../constants.js";
 
 export function createClientUserRouter({
-	storeModel,
+	userModel,
 	apiKeyModel,
 }: {
-	storeModel: ClientUsersStoreStaticMethods;
+	userModel: ClientUserStaticMethods;
 	apiKeyModel: ApiKeyStaticMethods;
 }): express.Router {
 
-	// Inject apiKeyModel into apikeyHandlerFunction
 	const apikeyHandler = createMiddlewareWrapper(
 		apiKeyModel,
 		apikeyHandlerFunction,
@@ -42,7 +47,7 @@ export function createClientUserRouter({
 
 	const router = express.Router();
 
-	// All client routes are protected by apikey + general rate limiter
+	// All client routes are protected by API key + general rate limiter
 	router.use(apikeyHandler, clientApiRateLimiter);
 
 	// ─── Auth ──────────────────────────────────────────────────────────────────
@@ -52,7 +57,7 @@ export function createClientUserRouter({
 		clientAuthRateLimiter,
 		ZodValidatorMiddleware(RegisterSchema),
 		(req, res, next) =>
-			clientUserControllers.registerController(req, res, next, storeModel),
+			clientUserControllers.registerController(req, res, next, userModel),
 	);
 
 	router.post(
@@ -60,18 +65,40 @@ export function createClientUserRouter({
 		clientAuthRateLimiter,
 		ZodValidatorMiddleware(LoginSchema),
 		(req, res, next) =>
-			clientUserControllers.loginController(req, res, next, storeModel),
+			clientUserControllers.loginController(req, res, next, userModel),
+	);
+
+	router.post(
+		"/logout",
+		(req, res, next) =>
+			clientUserControllers.logoutController(req, res, next, userModel),
 	);
 
 	// ─── OTP ───────────────────────────────────────────────────────────────────
+	// Unified verify endpoint — ?purpose= one of CLIENT_OTP_PURPOSES values
+	// Each purpose requires a different body shape — see controller for details
 
-	// Centralised OTP verification — ?purpose=ve-em-or | ve-em-up | fr-pa | ac-re
+	// ve-em-or
 	router.post(
 		"/verify",
 		clientOtpVerificationLimiter,
-		ZodValidatorMiddleware(VerifyOTPSchema),
+		(req, res, next) => {
+			const purpose = req.query.purpose as string;
+			const schemaMap: Record<string, Parameters<typeof ZodValidatorMiddleware>[0]> = {
+				[CLIENT_OTP_PURPOSES.VERIFY_EMAIL_REGISTER]: VerifyEmailOnRegisterSchema,
+				[CLIENT_OTP_PURPOSES.VERIFY_NEW_EMAIL]:      VerifyNewEmailSchema,
+				[CLIENT_OTP_PURPOSES.FORGOT_PASSWORD]:       VerifyForgotPasswordSchema,
+				[CLIENT_OTP_PURPOSES.UPDATE_PASSWORD]:       VerifyUpdatePasswordSchema,
+				[CLIENT_OTP_PURPOSES.ACCOUNT_RECOVERY]:      VerifyAccountRecoverySchema,
+			};
+			const schema = schemaMap[purpose];
+			if (schema) {
+				return ZodValidatorMiddleware(schema)(req, res, next);
+			}
+			next(); // unknown purpose handled inside controller
+		},
 		(req, res, next) =>
-			clientUserControllers.verificationController(req, res, next, storeModel),
+			clientUserControllers.verifyOTPController(req, res, next, userModel),
 	);
 
 	router.post(
@@ -79,28 +106,26 @@ export function createClientUserRouter({
 		clientOtpGenerationLimiter,
 		ZodValidatorMiddleware(ResendOTPSchema),
 		(req, res, next) =>
-			clientUserControllers.resendOTPController(req, res, next, storeModel),
+			clientUserControllers.resendOTPController(req, res, next, userModel),
 	);
 
 	// ─── Password ──────────────────────────────────────────────────────────────
 
-	// Step 1: send OTP to email
+	// Forgot password (unauthenticated) — sends OTP, complete via /verify?purpose=fr-pa
 	router.post(
 		"/forgot-password",
 		clientAuthRateLimiter,
 		ZodValidatorMiddleware(ForgotPasswordSchema),
 		(req, res, next) =>
-			clientUserControllers.forgotPasswordController(req, res, next, storeModel),
+			clientUserControllers.initiateForgotPasswordController(req, res, next, userModel),
 	);
 
-	// Step 2: done via /verify?purpose=fr-pa (verifies OTP + resets password in one call)
-
-	// Authenticated password update (old + new password, no OTP)
-	router.patch(
-		"/account/password",
+	// Authenticated password update — verifies current password, sends OTP, complete via /verify?purpose=up-pa
+	router.post(
+		"/account/password/initiate",
 		ZodValidatorMiddleware(UpdatePasswordSchema),
 		(req, res, next) =>
-			clientUserControllers.updatePasswordController(req, res, next, storeModel),
+			clientUserControllers.initiateUpdatePasswordController(req, res, next, userModel),
 	);
 
 	// ─── Account ───────────────────────────────────────────────────────────────
@@ -110,36 +135,35 @@ export function createClientUserRouter({
 		clientProfileUpdateLimiter,
 		ZodValidatorMiddleware(UpdateUsernameSchema),
 		(req, res, next) =>
-			clientUserControllers.updateUsernameController(req, res, next, storeModel),
+			clientUserControllers.updateUsernameController(req, res, next, userModel),
 	);
 
-	// Step 1: send OTP to new email
-	router.patch(
-		"/account/email",
+	// Step 1: confirm password + check new email, send OTP to current email
+	// Step 2: /verify?purpose=ve-em-cu (confirm current email, then sends OTP to new email)
+	// Step 3: /verify?purpose=ve-em-up (confirm new email, commits change)
+	router.post(
+		"/account/email/initiate",
 		clientProfileUpdateLimiter,
 		ZodValidatorMiddleware(UpdateEmailSchema),
 		(req, res, next) =>
-			clientUserControllers.updateEmailController(req, res, next, storeModel),
+			clientUserControllers.initiateEmailUpdateController(req, res, next, userModel),
 	);
-
-	// Step 2: done via /verify?purpose=ve-em-up
 
 	router.delete(
 		"/account/delete",
 		ZodValidatorMiddleware(DeleteAccountSchema),
 		(req, res, next) =>
-			clientUserControllers.deleteAccountController(req, res, next, storeModel),
+			clientUserControllers.deleteAccountController(req, res, next, userModel),
 	);
 
-	// Step 1: send OTP for recovery
+	// Recover soft-deleted account — sends OTP, complete via /verify?purpose=ac-re
 	router.post(
 		"/account/recover",
 		clientAuthRateLimiter,
+		ZodValidatorMiddleware(RecoverAccountSchema),
 		(req, res, next) =>
-			clientUserControllers.recoverAccountController(req, res, next, storeModel),
+			clientUserControllers.recoverAccountController(req, res, next, userModel),
 	);
-
-	// Step 2: done via /verify?purpose=ac-re
 
 	return router;
 }
