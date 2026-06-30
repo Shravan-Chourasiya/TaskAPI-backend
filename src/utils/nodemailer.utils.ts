@@ -49,6 +49,18 @@ export function getOtpHTML(otp: string, purpose: string) {
 			actionText = "Verify Email";
 			purposeAbb = "ve-em-up";
 			break;
+		case "verifyCurrentEmail":
+		case "ve-em-cu":
+			purposeDescription = "confirm your current email address before updating it.";
+			actionText = "Confirm Email";
+			purposeAbb = "ve-em-cu";
+			break;
+		case "updatePassword":
+		case "up-pa":
+			purposeDescription = "confirm your password change request.";
+			actionText = "Confirm Change";
+			purposeAbb = "up-pa";
+			break;
 		case "resetPassword":
 			purposeDescription = "reset your password.";
 			actionText = "Reset Password";

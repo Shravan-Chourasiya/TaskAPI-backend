@@ -1199,7 +1199,7 @@ export async function forgotPasswordUpdateController(
 		if (!userEmail || !newPassword) {
 			return res
 				.status(400)
-				.json({ message: "Email	 and New Password are required!" });
+				.json({ message: "Email	and New Password are required!" });
 		}
 		const user: UserDocument | null = await userModel.findOne({
 			_id: userId,
