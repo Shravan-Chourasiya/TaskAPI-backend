@@ -1,5 +1,7 @@
 import * as z from "zod";
 
+// ─── Primitives ───────────────────────────────────────────────────────────────
+
 export const usernameSchema = z
 	.string()
 	.min(3)
@@ -22,7 +24,12 @@ export const passwordSchema = z
 		"Password must contain at least one uppercase letter, one lowercase letter, and one number.",
 	);
 
-// ─── Auth Schemas ─────────────────────────────────────────────────────────────
+export const otpSchema = z
+	.string()
+	.length(6, "OTP must be exactly 6 digits")
+	.regex(/^\d{6}$/, "OTP must be numeric");
+
+// ─── Auth ─────────────────────────────────────────────────────────────────────
 
 export const RegisterSchema = z.object({
 	username: usernameSchema,
@@ -39,51 +46,85 @@ export const LogoutSchema = z.object({
 	deviceId: z.string().uuid("Invalid device ID format").optional(),
 });
 
-// ─── OTP Schemas ──────────────────────────────────────────────────────────────
+// ─── OTP — purpose-specific schemas ──────────────────────────────────────────
 
-export const VerifyOTPSchema = z.object({
+// ?purpose=ve-em-or — verify email on registration, activates account
+export const VerifyEmailOnRegisterSchema = z.object({
 	email: emailSchema,
-	otp: z.string().length(6, "OTP must be exactly 6 digits").regex(/^\d{6}$/, "OTP must be numeric"),
+	otp: otpSchema,
 });
 
+// ?purpose=ve-em-cu — step 1 of email update: verify OTP sent to CURRENT email
+// confirms the real user (not a hacker with a stolen token) initiated the change
+export const VerifyCurrentEmailSchema = z.object({
+	docId: z.string().min(1, "docId is required"),
+	otp: otpSchema,
+	newEmail: emailSchema,   // passed through so step 2 knows where to send next OTP
+});
+
+// ?purpose=ve-em-up — step 2 of email update: verify OTP sent to NEW email, commits the change
+export const VerifyNewEmailSchema = z.object({
+	newEmail: emailSchema,
+	otp: otpSchema,
+});
+
+// ?purpose=fr-pa — verify forgot-password OTP + submit new password in one shot
+export const VerifyForgotPasswordSchema = z.object({
+	email: emailSchema,
+	otp: otpSchema,
+	newPassword: passwordSchema,
+});
+
+// ?purpose=up-pa — authenticated user verifies OTP then submits new password
+export const VerifyUpdatePasswordSchema = z.object({
+	docId: z.string().min(1, "docId is required"),
+	otp: otpSchema,
+	newPassword: passwordSchema,
+});
+
+// ?purpose=ac-re — verify account recovery OTP, restores soft-deleted account
+export const VerifyAccountRecoverySchema = z.object({
+	email: emailSchema,
+	otp: otpSchema,
+});
+
+// Resend OTP — generic, purpose comes from ?purpose= query param
 export const ResendOTPSchema = z.object({
 	email: emailSchema,
 });
 
-// ─── Password Schemas ─────────────────────────────────────────────────────────
+// ─── Password ─────────────────────────────────────────────────────────────────
 
-// Authenticated user changing their own password (knows old password)
+// Authenticated user initiating password update — only old password needed to verify identity
+// new password is submitted later via verifyOTPController ?purpose=up-pa
 export const UpdatePasswordSchema = z.object({
 	oldPassword: passwordSchema,
-	newPassword: passwordSchema,
-}).refine((data) => data.oldPassword !== data.newPassword, {
-	message: "New password must be different from old password",
-	path: ["newPassword"],
 });
 
-// Unauthenticated user who forgot password (OTP verified separately)
+// Unauthenticated user who forgot password — sends OTP only
 export const ForgotPasswordSchema = z.object({
 	email: emailSchema,
 });
 
-export const ResetPasswordSchema = z.object({
-	email: emailSchema,
-	newPassword: passwordSchema,
-});
+// ─── Account updates ──────────────────────────────────────────────────────────
 
-// ─── Account Update Schemas ───────────────────────────────────────────────────
-
-// Current username comes from session, only new one needed
+// Current username comes from session/token, only new one needed in body
 export const UpdateUsernameSchema = z.object({
 	newUsername: usernameSchema,
 });
 
+// Initiates email update — password confirm + new email, OTP sent to new email
 export const UpdateEmailSchema = z.object({
 	password: passwordSchema,
 	newEmail: emailSchema,
 });
 
+// Soft-delete account — requires password confirmation
 export const DeleteAccountSchema = z.object({
-	email: emailSchema,
 	password: passwordSchema,
+});
+
+// Recover soft-deleted account — sends OTP only
+export const RecoverAccountSchema = z.object({
+	email: emailSchema,
 });

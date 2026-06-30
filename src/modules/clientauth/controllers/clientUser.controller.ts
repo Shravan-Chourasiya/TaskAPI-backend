@@ -2,39 +2,29 @@ import type { NextFunction, Request, Response } from "express";
 import type * as z from "zod";
 import { standardResponse } from "../../../utils/apiResponse.utils.js";
 import { otpService } from "../../../services/redisotp.service.js";
-import { sendVerificationEmail } from "../../../services/nodemailer.service.js";
-import { generateOTP, getOtpHTML } from "../../../utils/nodemailer.utils.js";
-import { hashEmail, clientUserUtils } from "../utils/clientUserUtils.js";
-import { CLIENT_REDIS_PREFIXES } from "../../../constants.js";
-import type {
-	ClientUsersStoreDocument,
-	ClientUsersStoreStaticMethods,
-} from "../types/userMongo.type.js";
+import { clientUserUtils } from "../utils/clientUserUtils.js";
+import { AUTH_CONSTANTS, CLIENT_OTP_PURPOSES, CLIENT_REDIS_PREFIXES } from "../../../constants.js";
+import type { ClientUserStaticMethods } from "../types/userMongo.type.js";
 import type {
 	RegisterSchema,
 	LoginSchema,
-	VerifyOTPSchema,
+	UpdateUsernameSchema,
 	ResendOTPSchema,
+	DeleteAccountSchema,
+	RecoverAccountSchema,
+	UpdateEmailSchema,
 	ForgotPasswordSchema,
 	UpdatePasswordSchema,
-	UpdateUsernameSchema,
-	UpdateEmailSchema,
-	DeleteAccountSchema,
+	VerifyEmailOnRegisterSchema,
+	VerifyNewEmailSchema,
+	VerifyForgotPasswordSchema,
+	VerifyUpdatePasswordSchema,
+	VerifyAccountRecoverySchema,
 } from "../utils/zodSchemas.js";
+import { OTP_PREFIX, sendAndStoreOTP } from "../utils/clientUserController.utils.js";
 
 type RequestWithApiOwner = Request & { apiOwnerId?: string };
-type StoreModel = ClientUsersStoreStaticMethods;
-
-const OTP_PREFIX = CLIENT_REDIS_PREFIXES.OTP_STORAGE; // "client:otp:"
-
-// ─── Private helper: find user in store map by userId ─────────────────────────
-
-async function findUserByIdInStore(store: ClientUsersStoreDocument, userId: string) {
-	for (const [hash, u] of store.users) {
-		if (u.userId === userId) return { emailHash: hash, user: u };
-	}
-	return null;
-}
+type UserModel = ClientUserStaticMethods;
 
 // ─── Register ─────────────────────────────────────────────────────────────────
 
@@ -42,48 +32,49 @@ export async function registerController(
 	req: RequestWithApiOwner,
 	res: Response,
 	next: NextFunction,
-	storeModel: StoreModel,
+	userModel: UserModel,
 ) {
 	try {
 		const { username, email, password }: z.infer<typeof RegisterSchema> = req.body;
 		const clientId = req.apiOwnerId!;
-		const emailHash = hashEmail(email);
 
-		const alreadyExists = await storeModel.userExists(clientId, emailHash);
+		const alreadyExists = await userModel.emailExists(clientId, email);
 		if (alreadyExists) {
 			return res.status(409).json(standardResponse(false, "Email already registered"));
 		}
 
 		const passwordHash = await clientUserUtils.hashPassword(password);
-		const newUser = clientUserUtils.createNewUser({ email, passwordHash, username });
 
-		await storeModel.findOneAndUpdate(
-			{ clientId },
-			{
-				$set: { [`users.${emailHash}`]: newUser },
-				$inc: { userCount: 1 },
-			},
-			{ upsert: true },
-		);
+		const doc = await userModel.create({
+			clientId,
+			email: email.toLowerCase().trim(),
+			passwordHash,
+			username: username?.toLowerCase(),
+			authProvider: "email",
+			emailVerified: false,
+			profile: {},
+			role: "user",
+			status: "pending",
+			twoFactorEnabled: false,
+			failedLoginAttempts: 0,
+			isDeleted: false,
+		});
 
-		const otp = generateOTP();
-		const html = getOtpHTML(otp, "verifyEmailOR");
-		const mailSent = await sendVerificationEmail(
-			process.env.GMAIL_USER_EMAIL as string,
+		const result = await sendAndStoreOTP(
 			email,
-			"Verify your email",
-			html,
+			CLIENT_OTP_PURPOSES.VERIFY_EMAIL_REGISTER,
+			doc._id.toString(),
+			"verifyEmailOR",
 		);
-		if (!mailSent) {
-			return res.status(503).json(standardResponse(false, "Failed to send verification email. Please try again later."));
+
+		if (!result.success) {
+			await userModel.deleteOne({ _id: doc._id });
+			return res.status(503).json(standardResponse(false, result.message!));
 		}
 
-		const otpStored = await otpService.storeOTP(email, otp, "verifyEmailOR", newUser.userId, undefined, 600, OTP_PREFIX);
-		if (!otpStored.success) {
-			return res.status(503).json(standardResponse(false, otpStored.message || "Failed to store OTP. Please try again later."));
-		}
-
-		return res.status(201).json(standardResponse(true, "Registered successfully. Verification OTP sent to your email."));
+		return res.status(201).json(standardResponse(true, "Registered successfully. Verification OTP sent to your email.", {
+			docId: doc._id,
+		}));
 	} catch (error) {
 		next(error);
 	}
@@ -95,14 +86,13 @@ export async function loginController(
 	req: RequestWithApiOwner,
 	res: Response,
 	next: NextFunction,
-	storeModel: StoreModel,
+	userModel: UserModel,
 ) {
 	try {
 		const { email, password }: z.infer<typeof LoginSchema> = req.body;
 		const clientId = req.apiOwnerId!;
-		const emailHash = hashEmail(email);
 
-		const user = await storeModel.getUser(clientId, emailHash);
+		const user = await userModel.findByEmail(clientId, email).select("+passwordHash");
 		if (!user) {
 			return res.status(404).json(standardResponse(false, "User not found"));
 		}
@@ -122,25 +112,41 @@ export async function loginController(
 		const isPasswordValid = await clientUserUtils.comparePassword(password, user.passwordHash);
 		if (!isPasswordValid) {
 			const updated = clientUserUtils.incrementFailedLogin(user);
-			updated.updatedAt = new Date();
-			await storeModel.findOneAndUpdate(
-				{ clientId },
-				{ $set: { [`users.${emailHash}`]: updated } },
+
+			// Build $set selectively — only include lock fields if a lock was actually applied
+			const failFields: Record<string, unknown> = {
+				failedLoginAttempts: updated.failedLoginAttempts,
+				lastFailedLoginAt: updated.lastFailedLoginAt,
+			};
+			if (updated.accountLockedUntil) {
+				failFields.accountLockedUntil = updated.accountLockedUntil;
+			}
+			if (updated.status === "suspended") {
+				failFields.status = "suspended";
+			}
+
+			await userModel.findOneAndUpdate(
+				{ _id: user._id },
+				{ $set: failFields },
 			);
 			return res.status(401).json(standardResponse(false, "Invalid password."));
 		}
 
-		let updated = clientUserUtils.resetFailedLogin(user);
-		updated = clientUserUtils.updateLoginActivity(updated, req.ip ?? "unknown");
-		updated.updatedAt = new Date();
-
-		await storeModel.findOneAndUpdate(
-			{ clientId },
-			{ $set: { [`users.${emailHash}`]: updated } },
+		await userModel.findOneAndUpdate(
+			{ _id: user._id },
+			{
+				$set: {
+					failedLoginAttempts: 0,
+					lastLoginAt: new Date(),
+					lastActiveAt: new Date(),
+					lastLoginIp: req.ip ?? "unknown",
+				},
+				$unset: { accountLockedUntil: "", lastFailedLoginAt: "" },
+			},
 		);
 
 		return res.status(200).json(standardResponse(true, "Login successful", {
-			userId: user.userId,
+			docId: user._id,
 			email: user.email,
 			username: user.username,
 			role: user.role,
@@ -151,147 +157,392 @@ export async function loginController(
 	}
 }
 
-// ─── Centralised OTP Verification
-// Verifies OTP and performs the associated action in one shot.
-// ?purpose= query param:
-//   ve-em-or → verify email on registration → activates account
-//   ve-em-up → verify new email → swaps map key to new email
-//   fr-pa    → verify forgot password OTP + update password in same call
-//   ac-re    → verify account recovery OTP + restore account in same call
+// ─── Logout ───────────────────────────────────────────────────────────────────
 
-export async function verificationController(
+export async function logoutController(
 	req: RequestWithApiOwner,
 	res: Response,
 	next: NextFunction,
-	storeModel: StoreModel,
+	userModel: UserModel,
 ) {
 	try {
-		const { email, otp }: z.infer<typeof VerifyOTPSchema> = req.body;
+		const { docId } = req.body as { docId: string };
 		const clientId = req.apiOwnerId!;
-		const purposeValue = req.query.purpose;
 
-		if (!purposeValue || typeof purposeValue !== "string") {
-			return res.status(400).json(standardResponse(false, "OTP purpose is required"));
+		if (!docId) {
+			return res.status(400).json(standardResponse(false, "docId is required"));
 		}
 
-		switch (purposeValue) {
+		await userModel.findOneAndUpdate(
+			{ clientId, _id: docId },
+			{ $set: { lastActiveAt: new Date() } },
+		);
 
-			case "ve-em-or": {
-				const otpResult = await otpService.verifyOTP(email, otp, "verifyEmailOR", OTP_PREFIX);
-				if (!otpResult.success) {
-					return res.status(400).json(standardResponse(false, otpResult.message));
-				}
-				const emailHash = hashEmail(email);
-				const user = await storeModel.getUser(clientId, emailHash);
+		return res.status(200).json(standardResponse(true, "Logged out successfully."));
+	} catch (error) {
+		next(error);
+	}
+}
+
+// ─── Unified OTP Verification ─────────────────────────────────────────────────
+// Purpose values (from CLIENT_OTP_PURPOSES in constants.ts):
+//   ve-em-or  → verify email on registration      body: { email, otp }
+//   ve-em-up  → verify new email after update     body: { newEmail, otp }
+//   fr-pa     → forgot-password OTP + reset       body: { email, otp, newPassword }
+//   up-pa     → authenticated password update     body: { docId, otp, newPassword }
+//   ac-re     → account recovery OTP              body: { email, otp }
+// User lookup + state checks run BEFORE Redis OTP verify in every case.
+
+export async function verifyOTPController(
+	req: RequestWithApiOwner,
+	res: Response,
+	next: NextFunction,
+	userModel: UserModel,
+) {
+	try {
+		const clientId = req.apiOwnerId!;
+		const purpose = req.query.purpose;
+
+		if (!purpose || typeof purpose !== "string") {
+			return res.status(400).json(standardResponse(false, "?purpose query param is required"));
+		}
+
+		const VALID_PURPOSES = Object.values(CLIENT_OTP_PURPOSES);
+		if (!VALID_PURPOSES.includes(purpose as typeof VALID_PURPOSES[number])) {
+			return res.status(400).json(standardResponse(false, `Invalid purpose. Must be one of: ${VALID_PURPOSES.join(", ")}`));
+		}
+
+		switch (purpose) {
+
+			// ── Verify email on registration ─────────────────────────────────────
+			case CLIENT_OTP_PURPOSES.VERIFY_EMAIL_REGISTER: {
+				const { email, otp }: z.infer<typeof VerifyEmailOnRegisterSchema> = req.body;
+
+				const user = await userModel.findByEmail(clientId, email);
 				if (!user) {
 					return res.status(404).json(standardResponse(false, "User not found"));
 				}
 				if (user.emailVerified) {
-					return res.status(400).json(standardResponse(false, "Email already verified"));
+					return res.status(400).json(standardResponse(false, "Email is already verified"));
 				}
-				const updated = clientUserUtils.verifyEmail(user);
-				updated.updatedAt = new Date();
-				await storeModel.findOneAndUpdate(
-					{ clientId },
-					{ $set: { [`users.${emailHash}`]: updated } },
+
+				const otpResult = await otpService.verifyOTP(email, otp, CLIENT_OTP_PURPOSES.VERIFY_EMAIL_REGISTER, OTP_PREFIX);
+				if (!otpResult.success) {
+					return res.status(400).json(standardResponse(false, otpResult.message));
+				}
+
+				await userModel.findOneAndUpdate(
+					{ clientId, _id: user._id },
+					{ $set: { emailVerified: true, verifiedAt: new Date(), status: "active" } },
 				);
+
 				return res.status(200).json(standardResponse(true, "Email verified successfully. You can now login."));
 			}
 
-			case "ve-em-up": {
-				// email here is the NEW email (OTP was sent to new email)
-				const otpResult = await otpService.verifyOTP(email, otp, "verifyEmailUP", OTP_PREFIX);
-				if (!otpResult.success || !otpResult.userId || !otpResult.newValue) {
-					return res.status(400).json(standardResponse(false, otpResult.message));
-				}
-				const store = await storeModel.findStore(clientId);
-				if (!store) {
-					return res.status(404).json(standardResponse(false, "Store not found"));
-				}
-				const found = await findUserByIdInStore(store, otpResult.userId);
-				if (!found) {
-					return res.status(404).json(standardResponse(false, "User not found"));
-				}
-				const newEmail = otpResult.newValue;
-				const newEmailHash = hashEmail(newEmail);
-				const updatedUser = { ...found.user, email: newEmail, updatedAt: new Date() };
-				await storeModel.findOneAndUpdate(
-					{ clientId },
-					{
-						$set: { [`users.${newEmailHash}`]: updatedUser },
-						$unset: { [`users.${found.emailHash}`]: "" },
-					},
-				);
-				return res.status(200).json(standardResponse(true, "Email updated successfully."));
-			}
+			// ── Verify new email (step 2 of email update) ────────────────────────
+			case CLIENT_OTP_PURPOSES.VERIFY_NEW_EMAIL: {
+				const { newEmail, otp }: z.infer<typeof VerifyNewEmailSchema> = req.body;
 
-			case "fr-pa": {
-				// Verify OTP + update password in one shot
-				const { newPassword } = req.body as { newPassword: string };
-				if (!newPassword) {
-					return res.status(400).json(standardResponse(false, "newPassword is required"));
-				}
-				const otpResult = await otpService.verifyOTP(email, otp, "forgotPassword", OTP_PREFIX);
+				// OTP stored against new email + docId as userId in Redis
+				const otpResult = await otpService.verifyOTP(newEmail, otp, CLIENT_OTP_PURPOSES.VERIFY_NEW_EMAIL, OTP_PREFIX);
 				if (!otpResult.success || !otpResult.userId) {
 					return res.status(400).json(standardResponse(false, otpResult.message));
 				}
-				const emailHash = hashEmail(email);
-				const user = await storeModel.getUser(clientId, emailHash);
+
+				const user = await userModel.findByDocId(clientId, otpResult.userId);
 				if (!user) {
 					return res.status(404).json(standardResponse(false, "User not found"));
 				}
+
+				const taken = await userModel.emailExists(clientId, newEmail);
+				if (taken) {
+					return res.status(409).json(standardResponse(false, "Email already in use"));
+				}
+
+				await userModel.findOneAndUpdate(
+					{ clientId, _id: user._id },
+					{ $set: { email: newEmail.toLowerCase().trim() } },
+				);
+
+				return res.status(200).json(standardResponse(true, "Email updated successfully."));
+			}
+
+			// ── Forgot password: verify OTP + reset password ─────────────────────
+			case CLIENT_OTP_PURPOSES.FORGOT_PASSWORD: {
+				const { email, otp, newPassword }: z.infer<typeof VerifyForgotPasswordSchema> = req.body;
+
+				const user = await userModel.findByEmail(clientId, email).select("+passwordHash +lastPassword");
+				if (!user) {
+					return res.status(404).json(standardResponse(false, "User not found"));
+				}
+
+				const otpResult = await otpService.verifyOTP(email, otp, CLIENT_OTP_PURPOSES.FORGOT_PASSWORD, OTP_PREFIX);
+				if (!otpResult.success) {
+					return res.status(400).json(standardResponse(false, otpResult.message));
+				}
+
 				const isReused = await clientUserUtils.isPasswordReused(newPassword, user.lastPassword);
 				if (isReused) {
 					return res.status(400).json(standardResponse(false, "New password cannot be the same as your last password"));
 				}
+
 				const newHash = await clientUserUtils.hashPassword(newPassword);
-				const now = new Date();
-				await storeModel.findOneAndUpdate(
-					{ clientId },
+				await userModel.findOneAndUpdate(
+					{ clientId, _id: user._id },
 					{
 						$set: {
-							[`users.${emailHash}.lastPassword`]: user.passwordHash,
-							[`users.${emailHash}.passwordHash`]: newHash,
-							[`users.${emailHash}.lastPasswordChangedAt`]: now,
-							[`users.${emailHash}.updatedAt`]: now,
+							passwordHash: newHash,
+							lastPassword: user.passwordHash,
+							lastPasswordChangedAt: new Date(),
 						},
 					},
 				);
-				return res.status(200).json(standardResponse(true, "Password reset successfully. You can now login.", {
-					userId: otpResult.userId,
-					email,
-				}));
+
+				return res.status(200).json(standardResponse(true, "Password reset successfully. You can now login."));
 			}
 
-			case "ac-re": {
-				// Verify OTP + restore account in one shot
-				const otpResult = await otpService.verifyOTP(email, otp, "accountRecovery", OTP_PREFIX);
+			// ── Authenticated password update: verify OTP + set new password ─────
+			case CLIENT_OTP_PURPOSES.UPDATE_PASSWORD: {
+				const { docId, otp, newPassword }: z.infer<typeof VerifyUpdatePasswordSchema> = req.body;
+
+				const user = await userModel.findByDocId(clientId, docId).select("+passwordHash +lastPassword");
+				if (!user) {
+					return res.status(404).json(standardResponse(false, "User not found"));
+				}
+
+				// OTP stored against user's registered email + up-pa purpose
+				const otpResult = await otpService.verifyOTP(user.email, otp, CLIENT_OTP_PURPOSES.UPDATE_PASSWORD, OTP_PREFIX);
 				if (!otpResult.success) {
 					return res.status(400).json(standardResponse(false, otpResult.message));
 				}
-				const emailHash = hashEmail(email);
-				const user = await storeModel.getUser(clientId, emailHash);
+
+				const isReused = await clientUserUtils.isPasswordReused(newPassword, user.lastPassword);
+				if (isReused) {
+					return res.status(400).json(standardResponse(false, "New password cannot be the same as your last password"));
+				}
+
+				const newHash = await clientUserUtils.hashPassword(newPassword);
+				await userModel.findOneAndUpdate(
+					{ clientId, _id: user._id },
+					{
+						$set: {
+							passwordHash: newHash,
+							lastPassword: user.passwordHash,
+							lastPasswordChangedAt: new Date(),
+						},
+					},
+				);
+
+				return res.status(200).json(standardResponse(true, "Password updated successfully."));
+			}
+
+			// ── Account recovery: verify OTP + restore account ───────────────────
+			case CLIENT_OTP_PURPOSES.ACCOUNT_RECOVERY: {
+				const { email, otp }: z.infer<typeof VerifyAccountRecoverySchema> = req.body;
+
+				const user = await userModel.findByEmail(clientId, email);
 				if (!user) {
 					return res.status(404).json(standardResponse(false, "User not found"));
 				}
 				if (!user.isDeleted) {
 					return res.status(400).json(standardResponse(false, "Account is not scheduled for deletion"));
 				}
-				if (user.status === "active") {
-					return res.status(400).json(standardResponse(false, "Account is already active"));
+
+				const otpResult = await otpService.verifyOTP(email, otp, CLIENT_OTP_PURPOSES.ACCOUNT_RECOVERY, OTP_PREFIX);
+				if (!otpResult.success) {
+					return res.status(400).json(standardResponse(false, otpResult.message));
 				}
-				const updated = clientUserUtils.restore(user);
-				updated.updatedAt = new Date();
-				await storeModel.findOneAndUpdate(
-					{ clientId },
-					{ $set: { [`users.${emailHash}`]: updated } },
+
+				await userModel.findOneAndUpdate(
+					{ clientId, _id: user._id },
+					{
+						$set: {
+							isDeleted: false,
+							status: user.emailVerified ? "active" : "pending",
+						},
+						$unset: { deletedAt: "", scheduledDeletionAt: "" },
+					},
 				);
+
 				return res.status(200).json(standardResponse(true, "Account recovered successfully. You can now login."));
 			}
-
-			default:
-				return res.status(403).json(standardResponse(false, "Invalid OTP purpose"));
 		}
+	} catch (error) {
+		next(error);
+	}
+}
+
+// ─── Initiate Email Update ────────────────────────────────────────────────────
+// Step 1: authenticated, confirms password, checks new email not taken,
+//         sends OTP to the CURRENT email to confirm real user intent.
+// Step 2: /verify?purpose=ve-em-up — sends OTP to new email after step 1 passes.
+// Step 3: /verify?purpose=ve-em-up with newEmail+otp commits the change.
+
+export async function initiateEmailUpdateController(
+	req: RequestWithApiOwner,
+	res: Response,
+	next: NextFunction,
+	userModel: UserModel,
+) {
+	try {
+		const { password, newEmail }: z.infer<typeof UpdateEmailSchema> = req.body;
+		const { docId } = req.body as { docId: string };
+		const clientId = req.apiOwnerId!;
+
+		if (!docId) {
+			return res.status(400).json(standardResponse(false, "docId is required"));
+		}
+
+		const user = await userModel.findByDocId(clientId, docId).select("+passwordHash");
+		if (!user) {
+			return res.status(404).json(standardResponse(false, "User not found"));
+		}
+		if (!user.passwordHash) {
+			return res.status(403).json(standardResponse(false, "Password login not available for this account"));
+		}
+
+		const isPasswordValid = await clientUserUtils.comparePassword(password, user.passwordHash);
+		if (!isPasswordValid) {
+			return res.status(401).json(standardResponse(false, "Invalid password"));
+		}
+
+		const taken = await userModel.emailExists(clientId, newEmail);
+		if (taken) {
+			return res.status(409).json(standardResponse(false, "Email already in use"));
+		}
+
+		// OTP sent to CURRENT email; newEmail stored as newValue in Redis
+		// so that the ve-em-up verify case knows where to send the next OTP
+		const result = await sendAndStoreOTP(
+			user.email,
+			CLIENT_OTP_PURPOSES.VERIFY_CURRENT_EMAIL,
+			docId,
+			"verifyCurrentEmail",
+			newEmail,
+		);
+		if (!result.success) {
+			return res.status(503).json(standardResponse(false, result.message!));
+		}
+
+		return res.status(200).json(standardResponse(true, "OTP sent to your current email. Verify via /verify?purpose=ve-em-cu"));
+	} catch (error) {
+		next(error);
+	}
+}
+
+// ─── Initiate Forgot Password ─────────────────────────────────────────────────
+// Unauthenticated. Sends OTP to registered email.
+// Completed via /verify?purpose=fr-pa (OTP + newPassword in one call).
+
+export async function initiateForgotPasswordController(
+	req: RequestWithApiOwner,
+	res: Response,
+	next: NextFunction,
+	userModel: UserModel,
+) {
+	try {
+		const { email }: z.infer<typeof ForgotPasswordSchema> = req.body;
+		const clientId = req.apiOwnerId!;
+
+		const user = await userModel.findByEmail(clientId, email);
+		if (!user) {
+			// Intentionally vague — prevents email enumeration
+			return res.status(200).json(standardResponse(true, "If this email is registered, an OTP has been sent."));
+		}
+
+		const result = await sendAndStoreOTP(
+			email,
+			CLIENT_OTP_PURPOSES.FORGOT_PASSWORD,
+			user._id.toString(),
+			"resetPassword",
+		);
+		if (!result.success) {
+			return res.status(503).json(standardResponse(false, result.message!));
+		}
+
+		return res.status(200).json(standardResponse(true, "If this email is registered, an OTP has been sent."));
+	} catch (error) {
+		next(error);
+	}
+}
+
+// ─── Initiate Update Password ─────────────────────────────────────────────────
+// Authenticated. Verifies current password, then sends OTP to registered email.
+// Completed via /verify?purpose=up-pa (OTP + newPassword).
+
+export async function initiateUpdatePasswordController(
+	req: RequestWithApiOwner,
+	res: Response,
+	next: NextFunction,
+	userModel: UserModel,
+) {
+	try {
+		const { oldPassword }: z.infer<typeof UpdatePasswordSchema> = req.body;
+		const { docId } = req.body as { docId: string };
+		const clientId = req.apiOwnerId!;
+
+		if (!docId) {
+			return res.status(400).json(standardResponse(false, "docId is required"));
+		}
+
+		const user = await userModel.findByDocId(clientId, docId).select("+passwordHash");
+		if (!user) {
+			return res.status(404).json(standardResponse(false, "User not found"));
+		}
+		if (!user.passwordHash) {
+			return res.status(403).json(standardResponse(false, "Password login not available for this account"));
+		}
+
+		const isOldValid = await clientUserUtils.comparePassword(oldPassword, user.passwordHash);
+		if (!isOldValid) {
+			return res.status(401).json(standardResponse(false, "Current password is incorrect"));
+		}
+
+		const result = await sendAndStoreOTP(
+			user.email,
+			CLIENT_OTP_PURPOSES.UPDATE_PASSWORD,
+			docId,
+			"updatePassword",
+		);
+		if (!result.success) {
+			return res.status(503).json(standardResponse(false, result.message!));
+		}
+
+		return res.status(200).json(standardResponse(true, "OTP sent to your registered email. Verify via /verify?purpose=up-pa"));
+	} catch (error) {
+		next(error);
+	}
+}
+
+// ─── Update Username ──────────────────────────────────────────────────────────
+// Authenticated. Confirms user belongs to this client, no password needed.
+
+export async function updateUsernameController(
+	req: RequestWithApiOwner,
+	res: Response,
+	next: NextFunction,
+	userModel: UserModel,
+) {
+	try {
+		const { newUsername }: z.infer<typeof UpdateUsernameSchema> = req.body;
+		const { docId } = req.body as { docId: string };
+		const clientId = req.apiOwnerId!;
+
+		if (!docId) {
+			return res.status(400).json(standardResponse(false, "docId is required"));
+		}
+
+		const user = await userModel.findByDocId(clientId, docId);
+		if (!user) {
+			return res.status(404).json(standardResponse(false, "User not found"));
+		}
+
+		await userModel.findOneAndUpdate(
+			{ clientId, _id: docId },
+			{ $set: { username: newUsername.toLowerCase() } },
+		);
+
+		return res.status(200).json(standardResponse(true, "Username updated successfully"));
 	} catch (error) {
 		next(error);
 	}
@@ -303,236 +554,38 @@ export async function resendOTPController(
 	req: RequestWithApiOwner,
 	res: Response,
 	next: NextFunction,
-	storeModel: StoreModel,
+	userModel: UserModel,
 ) {
 	try {
 		const { email }: z.infer<typeof ResendOTPSchema> = req.body;
-        const purpose = req.query.purpose;
-        if (!purpose || typeof purpose !== "string") {
-            return res.status(400).json(standardResponse(false, "OTP purpose is required"));
-        }
-		const clientId = req.apiOwnerId!;
-		const emailHash = hashEmail(email);
+		const purpose = req.query.purpose;
+		if (!purpose || typeof purpose !== "string") {
+			return res.status(400).json(standardResponse(false, "?purpose query param is required"));
+		}
 
-		const user = await storeModel.getUser(clientId, emailHash);
+		const VALID_PURPOSES = Object.values(CLIENT_OTP_PURPOSES);
+		if (!VALID_PURPOSES.includes(purpose as typeof VALID_PURPOSES[number])) {
+			return res.status(400).json(standardResponse(false, `Invalid purpose. Must be one of: ${VALID_PURPOSES.join(", ")}`));
+		}
+
+		const clientId = req.apiOwnerId!;
+
+		const user = await userModel.findByEmail(clientId, email);
 		if (!user) {
 			return res.status(404).json(standardResponse(false, "User not found"));
 		}
 
-		const otp = generateOTP();
-		const html = getOtpHTML(otp, "resendOtp");
-		const mailSent = await sendVerificationEmail(
-			process.env.GMAIL_USER_EMAIL as string,
+		const result = await sendAndStoreOTP(
 			email,
-			"Your OTP",
-			html,
+			purpose,
+			user._id.toString(),
+			"resendOtp",
 		);
-		if (!mailSent) {
-			return res.status(503).json(standardResponse(false, "Failed to send OTP email. Please try again later."));
-		}
-
-		const otpStored = await otpService.storeOTP(email, otp, purpose, user.userId, undefined, 600, OTP_PREFIX);
-		if (!otpStored.success) {
-			return res.status(503).json(standardResponse(false, otpStored.message || "Failed to store OTP. Please try again later."));
+		if (!result.success) {
+			return res.status(503).json(standardResponse(false, result.message!));
 		}
 
 		return res.status(200).json(standardResponse(true, "OTP resent successfully. Please check your email."));
-	} catch (error) {
-		next(error);
-	}
-}
-
-// ─── Forgot Password — sends OTP only ────────────────────────────────────────
-
-export async function forgotPasswordController(
-	req: RequestWithApiOwner,
-	res: Response,
-	next: NextFunction,
-	storeModel: StoreModel,
-) {
-	try {
-		const { email }: z.infer<typeof ForgotPasswordSchema> = req.body;
-		const clientId = req.apiOwnerId!;
-		const emailHash = hashEmail(email);
-
-		const user = await storeModel.getUser(clientId, emailHash);
-		if (!user) {
-			return res.status(404).json(standardResponse(false, "User not found"));
-		}
-
-		const otp = generateOTP();
-		const html = getOtpHTML(otp, "resetPassword");
-		const mailSent = await sendVerificationEmail(
-			process.env.GMAIL_USER_EMAIL as string,
-			email,
-			"Reset your password",
-			html,
-		);
-		if (!mailSent) {
-			return res.status(503).json(standardResponse(false, "Failed to send reset email. Please try again later."));
-		}
-
-		const otpStored = await otpService.storeOTP(email, otp, "forgotPassword", user.userId, undefined, 600, OTP_PREFIX);
-		if (!otpStored.success) {
-			return res.status(503).json(standardResponse(false, otpStored.message || "Failed to store OTP. Please try again later."));
-		}
-
-		return res.status(200).json(standardResponse(true, "OTP sent to your email. Submit OTP + new password to /verify?purpose=fr-pa", { email }));
-	} catch (error) {
-		next(error);
-	}
-}
-
-// ─── Update Password — authenticated, old + new password ─────────────────────
-
-export async function updatePasswordController(
-	req: RequestWithApiOwner,
-	res: Response,
-	next: NextFunction,
-	storeModel: StoreModel,
-) {
-	try {
-		const { oldPassword, newPassword }: z.infer<typeof UpdatePasswordSchema> = req.body;
-		const { userId } = req.body as { userId: string };
-		const clientId = req.apiOwnerId!;
-
-		const store = await storeModel.findStore(clientId);
-		if (!store) {
-			return res.status(404).json(standardResponse(false, "Store not found"));
-		}
-
-		const found = await findUserByIdInStore(store, userId);
-		if (!found) {
-			return res.status(404).json(standardResponse(false, "User not found"));
-		}
-		const { emailHash, user } = found;
-
-		if (!user.passwordHash) {
-			return res.status(403).json(standardResponse(false, "Password login not available for this account"));
-		}
-
-		const isOldValid = await clientUserUtils.comparePassword(oldPassword, user.passwordHash);
-		if (!isOldValid) {
-			return res.status(401).json(standardResponse(false, "Current password is incorrect"));
-		}
-
-		const isReused = await clientUserUtils.isPasswordReused(newPassword, user.lastPassword);
-		if (isReused) {
-			return res.status(400).json(standardResponse(false, "New password cannot be the same as your last password"));
-		}
-
-		const newHash = await clientUserUtils.hashPassword(newPassword);
-		const now = new Date();
-
-		await storeModel.findOneAndUpdate(
-			{ clientId },
-			{
-				$set: {
-					[`users.${emailHash}.lastPassword`]: user.passwordHash,
-					[`users.${emailHash}.passwordHash`]: newHash,
-					[`users.${emailHash}.lastPasswordChangedAt`]: now,
-					[`users.${emailHash}.updatedAt`]: now,
-				},
-			},
-		);
-
-		return res.status(200).json(standardResponse(true, "Password updated successfully"));
-	} catch (error) {
-		next(error);
-	}
-}
-
-// ─── Update Username ──────────────────────────────────────────────────────────
-
-export async function updateUsernameController(
-	req: RequestWithApiOwner,
-	res: Response,
-	next: NextFunction,
-	storeModel: StoreModel,
-) {
-	try {
-		const { newUsername }: z.infer<typeof UpdateUsernameSchema> = req.body;
-		const { userId } = req.body as { userId: string };
-		const clientId = req.apiOwnerId!;
-
-		const store = await storeModel.findStore(clientId);
-		if (!store) {
-			return res.status(404).json(standardResponse(false, "Store not found"));
-		}
-
-		const found = await findUserByIdInStore(store, userId);
-		if (!found) {
-			return res.status(404).json(standardResponse(false, "User not found"));
-		}
-
-		await storeModel.findOneAndUpdate(
-			{ clientId },
-			{
-				$set: {
-					[`users.${found.emailHash}.username`]: newUsername.toLowerCase(),
-					[`users.${found.emailHash}.updatedAt`]: new Date(),
-				},
-			},
-		);
-
-		return res.status(200).json(standardResponse(true, "Username updated successfully"));
-	} catch (error) {
-		next(error);
-	}
-}
-
-// ─── Update Email — sends OTP to new email, verified via ?purpose=ve-em-up ────
-
-export async function updateEmailController(
-	req: RequestWithApiOwner,
-	res: Response,
-	next: NextFunction,
-	storeModel: StoreModel,
-) {
-	try {
-		const { password, newEmail }: z.infer<typeof UpdateEmailSchema> = req.body;
-		const { userId } = req.body as { userId: string };
-		const clientId = req.apiOwnerId!;
-		const newEmailHash = hashEmail(newEmail);
-
-		const alreadyTaken = await storeModel.userExists(clientId, newEmailHash);
-		if (alreadyTaken) {
-			return res.status(409).json(standardResponse(false, "Email already in use"));
-		}
-
-		const store = await storeModel.findStore(clientId);
-		if (!store) {
-			return res.status(404).json(standardResponse(false, "Store not found"));
-		}
-
-		const found = await findUserByIdInStore(store, userId);
-		if (!found || !found.user.passwordHash) {
-			return res.status(404).json(standardResponse(false, "User not found"));
-		}
-
-		const isPasswordValid = await clientUserUtils.comparePassword(password, found.user.passwordHash);
-		if (!isPasswordValid) {
-			return res.status(401).json(standardResponse(false, "Invalid password"));
-		}
-
-		const otp = generateOTP();
-		const html = getOtpHTML(otp, "verifyEmailUP");
-		const mailSent = await sendVerificationEmail(
-			process.env.GMAIL_USER_EMAIL as string,
-			newEmail,
-			"Verify your new email",
-			html,
-		);
-		if (!mailSent) {
-			return res.status(503).json(standardResponse(false, "Failed to send verification email. Please try again later."));
-		}
-
-		const otpStored = await otpService.storeOTP(newEmail, otp, "verifyEmailUP", userId, newEmail, 600, OTP_PREFIX);
-		if (!otpStored.success) {
-			return res.status(503).json(standardResponse(false, otpStored.message || "Failed to store OTP. Please try again later."));
-		}
-
-		return res.status(200).json(standardResponse(true, "OTP sent to new email. Complete verification via /verify?purpose=ve-em-up"));
 	} catch (error) {
 		next(error);
 	}
@@ -544,14 +597,18 @@ export async function deleteAccountController(
 	req: RequestWithApiOwner,
 	res: Response,
 	next: NextFunction,
-	storeModel: StoreModel,
+	userModel: UserModel,
 ) {
 	try {
-		const { email, password }: z.infer<typeof DeleteAccountSchema> = req.body;
+		const { password }: z.infer<typeof DeleteAccountSchema> = req.body;
+		const { docId } = req.body as { docId: string };
 		const clientId = req.apiOwnerId!;
-		const emailHash = hashEmail(email);
 
-		const user = await storeModel.getUser(clientId, emailHash);
+		if (!docId) {
+			return res.status(400).json(standardResponse(false, "docId is required"));
+		}
+
+		const user = await userModel.findByDocId(clientId, docId).select("+passwordHash");
 		if (!user) {
 			return res.status(404).json(standardResponse(false, "User not found"));
 		}
@@ -566,34 +623,42 @@ export async function deleteAccountController(
 			return res.status(400).json(standardResponse(false, "Account already scheduled for deletion"));
 		}
 
-		const updated = clientUserUtils.softDelete(user);
-		updated.updatedAt = new Date();
-
-		await storeModel.findOneAndUpdate(
-			{ clientId },
-			{ $set: { [`users.${emailHash}`]: updated } },
+		const now = new Date();
+		await userModel.findOneAndUpdate(
+			{ clientId, _id: docId },
+			{
+				$set: {
+					isDeleted: true,
+					deletedAt: now,
+					status: "deleted",
+					scheduledDeletionAt: new Date(
+						now.getTime() + AUTH_CONSTANTS.SOFT_DELETE_GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1000,
+					),
+				},
+			},
 		);
 
-		return res.status(200).json(standardResponse(true, "Account scheduled for deletion. You can recover it within 30 days."));
+		return res.status(200).json(standardResponse(true, `Account scheduled for deletion. You can recover it within ${AUTH_CONSTANTS.SOFT_DELETE_GRACE_PERIOD_DAYS} days.`));
 	} catch (error) {
 		next(error);
 	}
 }
 
-// ─── Recover Account — sends OTP only, verified via ?purpose=ac-re ────────────
+// ─── Recover Account ──────────────────────────────────────────────────────────
+// Unauthenticated. Sends OTP to registered email.
+// Completed via /verify?purpose=ac-re.
 
 export async function recoverAccountController(
 	req: RequestWithApiOwner,
 	res: Response,
 	next: NextFunction,
-	storeModel: StoreModel,
+	userModel: UserModel,
 ) {
 	try {
-		const { email } = req.body as { email: string };
+		const { email }: z.infer<typeof RecoverAccountSchema> = req.body;
 		const clientId = req.apiOwnerId!;
-		const emailHash = hashEmail(email);
 
-		const user = await storeModel.getUser(clientId, emailHash);
+		const user = await userModel.findByEmail(clientId, email);
 		if (!user) {
 			return res.status(404).json(standardResponse(false, "User not found"));
 		}
@@ -601,21 +666,14 @@ export async function recoverAccountController(
 			return res.status(400).json(standardResponse(false, "Account is not scheduled for deletion"));
 		}
 
-		const otp = generateOTP();
-		const html = getOtpHTML(otp, "accountRecovery");
-		const mailSent = await sendVerificationEmail(
-			process.env.GMAIL_USER_EMAIL as string,
+		const result = await sendAndStoreOTP(
 			email,
-			"Recover your account",
-			html,
+			CLIENT_OTP_PURPOSES.ACCOUNT_RECOVERY,
+			user._id.toString(),
+			"accountRecovery",
 		);
-		if (!mailSent) {
-			return res.status(503).json(standardResponse(false, "Failed to send recovery email. Please try again later."));
-		}
-
-		const otpStored = await otpService.storeOTP(email, otp, "accountRecovery", user.userId, undefined, 600, OTP_PREFIX);
-		if (!otpStored.success) {
-			return res.status(503).json(standardResponse(false, otpStored.message || "Failed to store OTP. Please try again later."));
+		if (!result.success) {
+			return res.status(503).json(standardResponse(false, result.message!));
 		}
 
 		return res.status(200).json(standardResponse(true, "OTP sent to your email. Verify via /verify?purpose=ac-re to complete recovery."));
