@@ -14,7 +14,7 @@ import { initUserModel } from "./modules/auth/models/user.schema.js";
 import { initSessionModel } from "./modules/auth/models/session.schema.js";
 import { initApiKeyModel } from "./modules/auth/models/apikey.schema.js";
 import { initSubscriptionModel } from "./modules/auth/models/subscription.schema.js";
-import { initClientUsersStoreModel } from "./modules/clientauth/schemas/userMongo.schema.js";
+import { initClientUserModel } from "./modules/clientauth/schemas/userMongo.schema.js";
 
 const app = express();
 
@@ -31,7 +31,8 @@ const userModel = initUserModel(TaskapiDb);
 const sessionModel = initSessionModel(TaskapiDb);
 const apiKeyModel = initApiKeyModel(TaskapiDb);
 const subscriptionModel = initSubscriptionModel(TaskapiDb);
-const clientUsersStoreModel=initClientUsersStoreModel(TaskapiClientsDb);
+const clientUserModel = initClientUserModel(TaskapiClientsDb);
+const clientUsersStoreModel = clientUserModel; // alias kept for readability during transition
 const authRouter: express.Router = createAuthRouter({
 	userModel,
 	sessionModel,
@@ -47,8 +48,8 @@ const apiKeyRouter: express.Router = createApiKeyRouter({
 	apiKeyModel,
 });
 const clientUserRouter: express.Router = createClientUserRouter({
-	storeModel: clientUsersStoreModel,
-	apiKeyModel
+	userModel: clientUserModel,
+	apiKeyModel,
 });
 
 
