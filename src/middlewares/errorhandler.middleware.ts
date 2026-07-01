@@ -1,4 +1,5 @@
 import jwt from "jsonwebtoken";
+import multer from "multer";
 import type { AppError } from "../types/errors.interface.js";
 
 interface ClassErrReturnType {
@@ -31,6 +32,17 @@ export function classifyError(err: unknown): ClassErrReturnType {
 				message: "Invalid email recipients",
 				errSrc: "nodemailer:EENVELOPE",
 			};
+	}
+
+	// Multer
+	if (err instanceof multer.MulterError) {
+		if (err.code === "LIMIT_FILE_SIZE") {
+			return { status: 400, message: `File too large. Maximum size is ${5}MB`, errSrc: "multer:LIMIT_FILE_SIZE" };
+		}
+		if (err.code === "LIMIT_UNEXPECTED_FILE") {
+			return { status: 400, message: "Unexpected file field", errSrc: "multer:LIMIT_UNEXPECTED_FILE" };
+		}
+		return { status: 400, message: err.message, errSrc: "multer" };
 	}
 
 	// JWT
