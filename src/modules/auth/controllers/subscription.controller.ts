@@ -150,9 +150,9 @@ export const buySubscriptionController = async (
 	userModel: Model<UserDocument, UserStaticMethods>,
 	subscriptionModel: Model<SubscriptionDocument, SubscriptionStaticMethods>,
 ) => {
-	const { subscriptionPlanDetails }: z.infer<typeof buySubscriptionSchema> =
-		req.body;
 	try {
+		const { subscriptionPlanDetails }: z.infer<typeof buySubscriptionSchema> =
+			req.body;
 		const decoded = jwt.verify(
 			req.cookies.acToken,
 			config.ACCESS_TOKEN_JWT_SECRET,
@@ -180,20 +180,19 @@ export const buySubscriptionController = async (
 				.json(standardResponse(false, "Invalid subscription plan"));
 		}
 
+		// Explicitly verify price and duration against server-side plan config
+		// Prevents tampered requests sending 0 price for paid plans
+		const expectedPlan = SUBSCRIPTION_PLANS[subscriptionPlanDetails.planName];
 		if (
-			SUBSCRIPTION_PLANS[subscriptionPlanDetails.planName].price !==
-			subscriptionPlanDetails.price
+			subscriptionPlanDetails.price !== expectedPlan.price ||
+			subscriptionPlanDetails.duration !== expectedPlan.duration
 		) {
 			return res
 				.status(400)
-				.json(
-					standardResponse(
-						false,
-						"Price mismatch for the selected subscription plan",
-					),
-				);
+				.json(standardResponse(false, "Price or duration does not match the selected plan"));
 		}
 
+		// Price and duration already validated by Zod schema
 		const existingSubscription: SubscriptionDocument | null =
 			await subscriptionModel.findOne({ userId });
 

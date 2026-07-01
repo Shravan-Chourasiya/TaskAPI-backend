@@ -211,8 +211,8 @@ export const revokeApiKeyController = async (
 
 		const userId = decoded.id;
 		const apiKey: ApiKeyDocument | null = await apiKeyModel.findOne({
-			_id: keyId,
-			userId,
+			_id: keyId as string,
+			userId: userId as string,
 		});
 
 		if (!apiKey) {
