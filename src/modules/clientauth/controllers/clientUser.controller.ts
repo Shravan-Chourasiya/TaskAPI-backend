@@ -207,11 +207,6 @@ export async function verifyOTPController(
 			return res.status(400).json(standardResponse(false, "?purpose query param is required"));
 		}
 
-		const VALID_PURPOSES = Object.values(CLIENT_OTP_PURPOSES);
-		if (!VALID_PURPOSES.includes(purpose as typeof VALID_PURPOSES[number])) {
-			return res.status(400).json(standardResponse(false, `Invalid purpose. Must be one of: ${VALID_PURPOSES.join(", ")}`));
-		}
-
 		switch (purpose) {
 
 			// ── Verify email on registration ─────────────────────────────────────
@@ -561,11 +556,6 @@ export async function resendOTPController(
 		const purpose = req.query.purpose;
 		if (!purpose || typeof purpose !== "string") {
 			return res.status(400).json(standardResponse(false, "?purpose query param is required"));
-		}
-
-		const VALID_PURPOSES = Object.values(CLIENT_OTP_PURPOSES);
-		if (!VALID_PURPOSES.includes(purpose as typeof VALID_PURPOSES[number])) {
-			return res.status(400).json(standardResponse(false, `Invalid purpose. Must be one of: ${VALID_PURPOSES.join(", ")}`));
 		}
 
 		const clientId = req.apiOwnerId!;
