@@ -3,6 +3,8 @@ import * as subscriptionControllers from "../modules/auth/controllers/subscripti
 import { accessTokenHandlerFunction } from "../middlewares/tokenhandler.middleware.js";
 import { createMiddlewareWrapper } from "../utils/middlewareWrapper.js";
 import { asyncErrorHandler } from "../utils/asynchandler.utils.js";
+import { ZodValidatorMiddleware } from "../middlewares/zodvalidation.middleware.js";
+import { buySubscriptionSchema } from "../libs/zod/subscription.zodschema.js";
 
 export function createSubscriptionRouter({
 	userModel,
@@ -20,7 +22,7 @@ export function createSubscriptionRouter({
 	);
 	const router = express.Router();
 
-	router.post("/create-order", accessTokenHandler, (req, res, next) =>
+	router.post("/create-order", accessTokenHandler, ZodValidatorMiddleware(buySubscriptionSchema), (req, res, next) =>
 		subscriptionControllers.buySubscriptionController(
 			req,
 			res,
