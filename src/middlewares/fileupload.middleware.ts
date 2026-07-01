@@ -18,7 +18,8 @@ export const fileUploadMiddleware = async (
 			: req.headers["content-type"] ?? "";
 
 		if (!contentType.includes("multipart/form-data")) {
-			return res.status(400).json({ success: false, message: "File upload requires multipart/form-data" });
+			// Non-multipart: pass through as-is (JSON profile update without file)
+			return next();
 		}
 
 		let fileUrl: string | undefined;
