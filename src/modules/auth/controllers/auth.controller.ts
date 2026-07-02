@@ -1,10 +1,8 @@
 import jwt, { type JwtPayload } from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { config } from "../../../configs/app.config.js";
-import { generateOTP, getOtpHTML } from "../../../utils/nodemailer.utils.js";
-import { sendVerificationEmail } from "../../../services/nodemailer.service.js";
 import type { NextFunction, Request, Response } from "express";
-import { emailPurposeMapper, sendAndStoreOTP } from "../utils/authcontroller.utils.js";
+import { emailPurposeMapper, sendAndStoreOTP, AUTH_OTP_PURPOSES, OTP_PREFIX } from "../utils/authcontroller.utils.js";
 import * as z from "zod";
 import crypto from "crypto";
 import type {
@@ -57,37 +55,17 @@ export async function registerController(
 		);
 
 		if (existingUnverifiedUser) {
-			const emailSubject = emailPurposeMapper("verifyEmailOR");
-			const otp = generateOTP();
-			const html = getOtpHTML(otp, "resendOtp");
-
-			const mailSuccess = await sendVerificationEmail(
-				config.GMAIL_USER_EMAIL,
+			const result = await sendAndStoreOTP(
 				existingUnverifiedUser.email,
-				emailSubject,
-				html,
-			);
-			if (!mailSuccess) {
-				return res.status(503).json({
-					message: "Failed to send OTP email. Please try again later.",
-				});
-			}
-
-			const otpStoreSuccess = await otpService.storeOTP(
-				email,
-				otp,
-				"verifyEmailOR",
+				AUTH_OTP_PURPOSES.VERIFY_EMAIL_REGISTER,
 				existingUnverifiedUser._id.toString(),
+				"resendOtp",
 			);
-
-			if (!otpStoreSuccess.success) {
-				return res.status(503).json({
-					message: "Failed to store OTP. Please try again later.",
-				});
+			if (!result.success) {
+				return res.status(503).json({ message: result.message });
 			}
 			return res.status(409).json({
-				message:
-					"Email Already Registered but not verified! Verification OTP sent to your email . Verify Email and complete registration!",
+				message: "Email Already Registered but not verified! Verification OTP sent to your email . Verify Email and complete registration!",
 				isRegisteredButNotVerified: true,
 			});
 		}
@@ -104,37 +82,17 @@ export async function registerController(
 				message: "User Not Registered.Please try again Later!",
 			});
 		}
-		const otp = generateOTP();
-		const html = getOtpHTML(otp, "verifyEmailOR");
-		const mailSuccess = await sendVerificationEmail(
-			config.GMAIL_USER_EMAIL as string,
+		const result = await sendAndStoreOTP(
 			email,
-			emailPurposeMapper("verifyEmailOR"),
-			html,
-		);
-		if (!mailSuccess) {
-			return res.status(503).json({
-				message:
-					"Failed to send verification email. Please try registering again later.",
-			});
-		}
-		const otpStoreSuccess = await otpService.storeOTP(
-			email,
-			otp,
-			"verifyEmailOR",
+			AUTH_OTP_PURPOSES.VERIFY_EMAIL_REGISTER,
 			user[0]?._id.toString(),
+			"verifyEmailOR",
 		);
-		if (!otpStoreSuccess.success) {
-			return res.status(503).json({
-				message:
-					otpStoreSuccess.message ||
-					"Failed to store OTP. Please try again later.",
-			});
+		if (!result.success) {
+			return res.status(503).json({ message: result.message });
 		}
-
 		return res.status(201).json({
-			message:
-				"User Registered Successfully! Verification OTP sent to your email . Verify Email and complete registration!",
+			message: "User Registered Successfully! Verification OTP sent to your email . Verify Email and complete registration!",
 		});
 	} catch (error) {
 		next(error);
@@ -561,8 +519,7 @@ export async function updateDetailsController(
 				});
 				return res.status(200).json({ message: "Username updated successfully!" });
 			case "email": {
-				// Step 1: OTP to current email; newValue (new email) stored in Redis
-				const result = await sendAndStoreOTP(user.email, "ve-em-cu", user._id.toString(), "verifyCurrentEmail", newValue);
+				const result = await sendAndStoreOTP(user.email, AUTH_OTP_PURPOSES.VERIFY_CURRENT_EMAIL, user._id.toString(), "verifyCurrentEmail", newValue);
 				if (!result.success) {
 					return res.status(503).json({ message: result.message });
 				}
@@ -570,7 +527,7 @@ export async function updateDetailsController(
 			}
 			case "password": {
 				const newPasswordHash = await bcrypt.hash(newValue, 12);
-				const result = await sendAndStoreOTP(user.email, "resetPassword", user._id.toString(), "resetPassword", newPasswordHash);
+				const result = await sendAndStoreOTP(user.email, AUTH_OTP_PURPOSES.RESET_PASSWORD, user._id.toString(), "resetPassword", newPasswordHash);
 				if (!result.success) {
 					return res.status(503).json({ message: result.message });
 				}
@@ -702,35 +659,17 @@ export async function recoverDeletedAccountController(
 				.status(400)
 				.json({ message: "Account is not Scheduled to be Deleted!" });
 		}
-		const otp = generateOTP();
-		const html = getOtpHTML(otp, "accountRecovery");
-		const mailSuccess = await sendVerificationEmail(
-			config.GMAIL_USER_EMAIL,
+		const result = await sendAndStoreOTP(
 			user.email,
-			emailPurposeMapper("accountRecovery"),
-			html,
-		);
-		if (!mailSuccess) {
-			return res.status(503).json({
-				message: "Failed to send verification email. Please try again later.",
-			});
-		}
-		const otpStoreSuccess = await otpService.storeOTP(
-			email,
-			otp,
-			"accountRecovery",
+			AUTH_OTP_PURPOSES.ACCOUNT_RECOVERY,
 			user._id.toString(),
+			"accountRecovery",
 		);
-		if (!otpStoreSuccess.success) {
-			return res.status(503).json({
-				message:
-					otpStoreSuccess.message ||
-					"Failed to store OTP. Please try again later.",
-			});
+		if (!result.success) {
+			return res.status(503).json({ message: result.message });
 		}
 		return res.status(200).json({
-			message:
-				"OTP Sent to your Email! Complete OTP Verification to recover your account!",
+			message: "OTP Sent to your Email! Complete OTP Verification to recover your account!",
 		});
 	} catch (error) {
 		next(error);
@@ -791,21 +730,16 @@ export async function verificationController(
 		if (!purposeValue || typeof purposeValue !== "string") {
 			return res.status(400).json({ message: "OTP purpose is required!" });
 		}
-		if (purposeValue === "ve-em-or") {
-			const otpResult = await otpService.verifyOTP(email, otp, "verifyEmailOR");
+		if (purposeValue === AUTH_OTP_PURPOSES.VERIFY_EMAIL_REGISTER) {
+			const otpResult = await otpService.verifyOTP(email, otp, AUTH_OTP_PURPOSES.VERIFY_EMAIL_REGISTER, OTP_PREFIX);
 			if (!otpResult.success) {
 				return res.status(400).json({ message: otpResult.message });
 			}
 			const userId = otpResult.userId;
 			if (!userId) {
-				return res.status(400).json({
-					message:
-						"Invalid OTP verification attempt.Please try registering after some Time.",
-				});
+				return res.status(400).json({ message: "Invalid OTP verification attempt. Please try registering after some time." });
 			}
-			const user: UserDocument | null = await userModel.findOne({
-				_id: userId,
-			});
+			const user: UserDocument | null = await userModel.findOne({ _id: userId });
 			if (!user) {
 				return res.status(404).json({ message: "User Not Found!" });
 			}
@@ -814,28 +748,24 @@ export async function verificationController(
 			}
 			user.isVerified = true;
 			await user.save();
-			return res.status(200).json({
-				message:
-					"Email Verified Successfully! You can now login to your account!",
-			});
-		} else if (purposeValue === "ve-em-cu") {
+			return res.status(200).json({ message: "Email Verified Successfully! You can now login to your account!" });
+		} else if (purposeValue === AUTH_OTP_PURPOSES.VERIFY_CURRENT_EMAIL) {
 			// Step 2: verify OTP on current email → send OTP to new email
-			const otpResult = await otpService.verifyOTP(email, otp, "ve-em-cu");
+			const otpResult = await otpService.verifyOTP(email, otp, AUTH_OTP_PURPOSES.VERIFY_CURRENT_EMAIL, OTP_PREFIX);
 			if (!otpResult.success) {
 				return res.status(400).json({ message: otpResult.message });
 			}
 			if (!otpResult.newValue || !otpResult.userId) {
 				return res.status(400).json({ message: "Invalid OTP data. Please restart the email update process." });
 			}
-			// Send OTP to the new email; store docId so step 3 can find the user
-			const sendResult = await sendAndStoreOTP(otpResult.newValue, "ve-em-up", otpResult.userId, "verifyEmailUP");
+			const sendResult = await sendAndStoreOTP(otpResult.newValue, AUTH_OTP_PURPOSES.VERIFY_NEW_EMAIL, otpResult.userId, "verifyEmailUP");
 			if (!sendResult.success) {
 				return res.status(503).json({ message: sendResult.message });
 			}
 			return res.status(200).json({ message: "Current email verified! OTP sent to your new email. Complete verification to update." });
-		} else if (purposeValue === "ve-em-up") {
+		} else if (purposeValue === AUTH_OTP_PURPOSES.VERIFY_NEW_EMAIL) {
 			// Step 3: verify OTP on new email → commit email change
-			const otpResult = await otpService.verifyOTP(email, otp, "verifyEmailUP");
+			const otpResult = await otpService.verifyOTP(email, otp, AUTH_OTP_PURPOSES.VERIFY_NEW_EMAIL, OTP_PREFIX);
 			if (!otpResult.success) {
 				return res.status(400).json({ message: otpResult.message });
 			}
@@ -849,110 +779,53 @@ export async function verificationController(
 			user.email = email;
 			await user.save();
 			return res.status(200).json({ message: "Email updated successfully!" });
-		} else if (purposeValue === "re-pa") {
-			const otpResult = await otpService.verifyOTP(email, otp, "resetPassword");
-
+		} else if (purposeValue === AUTH_OTP_PURPOSES.RESET_PASSWORD) {
+			const otpResult = await otpService.verifyOTP(email, otp, AUTH_OTP_PURPOSES.RESET_PASSWORD, OTP_PREFIX);
 			if (!otpResult.success) {
 				return res.status(400).json({ message: otpResult.message });
 			}
-			if (!otpResult.newValue) {
-				return res
-					.status(400)
-					.json({ message: "New password value not found in OTP data." });
+			if (!otpResult.newValue || !otpResult.userId) {
+				return res.status(400).json({ message: "Invalid OTP data. Please restart the password reset process." });
 			}
-			const userId = otpResult.userId;
-			if (!userId) {
-				return res.status(400).json({
-					message:
-						"Invalid OTP verification attempt.Please try registering after some Time.",
-				});
-			}
-			const user: UserDocument | null = await userModel.findOne({
-				_id: userId,
-			});
+			const user: UserDocument | null = await userModel.findOne({ _id: otpResult.userId });
 			if (!user) {
 				return res.status(404).json({ message: "User Not Found!" });
 			}
-			if (user.isVerified) {
-				return res.status(400).json({ message: "Email Already Verified!" });
-			}
-			const isSameAsOldPassword = await user.isPasswordReused(
-				otpResult.newValue,
-			);
+			const isSameAsOldPassword = await user.isPasswordReused(otpResult.newValue);
 			if (isSameAsOldPassword) {
-				return res
-					.status(400)
-					.json({ message: "New Password cannot be same as last  password!" });
+				return res.status(400).json({ message: "New Password cannot be same as last password!" });
 			}
 			user.passwordHash = otpResult.newValue;
-			user.isVerified = true;
-			await sessionModel.revokeAllUserSessions(
-				user._id.toString(),
-				"Password Reset",
-			);
+			await sessionModel.revokeAllUserSessions(user._id.toString(), "Password Reset");
 			await user.save();
-			return res.status(200).json({
-				message:
-					"Password Updated Successfully! You can now login to your account!",
-			});
-		} else if (purposeValue === "fr-pa") {
-			const otpResult = await otpService.verifyOTP(
-				email,
-				otp,
-				"forgotPassword",
-			);
-
+			return res.status(200).json({ message: "Password Updated Successfully! You can now login to your account!" });
+		} else if (purposeValue === AUTH_OTP_PURPOSES.FORGOT_PASSWORD) {
+			const otpResult = await otpService.verifyOTP(email, otp, AUTH_OTP_PURPOSES.FORGOT_PASSWORD_INIT, OTP_PREFIX);
 			if (!otpResult.success) {
 				return res.status(400).json({ message: otpResult.message });
 			}
 			return res.status(200).json({
-				message:
-					"OTP Verified Successfully! Complete Password Reset Procedure to reset your password!",
-				data: {
-					userId: otpResult.userId,
-					userEmail: email,
-				},
+				message: "OTP Verified Successfully! Complete Password Reset Procedure to reset your password!",
+				data: { userId: otpResult.userId, userEmail: email },
 			});
-		} else if (purposeValue === "ac-re") {
-			const otpResult = await otpService.verifyOTP(
-				email,
-				otp,
-				"accountRecovery",
-			);
-
+		} else if (purposeValue === AUTH_OTP_PURPOSES.ACCOUNT_RECOVERY) {
+			const otpResult = await otpService.verifyOTP(email, otp, AUTH_OTP_PURPOSES.ACCOUNT_RECOVERY, OTP_PREFIX);
 			if (!otpResult.success) {
 				return res.status(400).json({ message: otpResult.message });
 			}
-			if (!otpResult.newValue) {
-				return res
-					.status(400)
-					.json({ message: "New email value not found in OTP data." });
+			if (!otpResult.userId) {
+				return res.status(400).json({ message: "Invalid OTP verification attempt. Please try again." });
 			}
-			const userId = otpResult.userId;
-			if (!userId) {
-				return res.status(400).json({
-					message:
-						"Invalid OTP verification attempt.Please try registering after some Time.",
-				});
-			}
-			const user: UserDocument | null = await userModel.findOne({
-				_id: userId,
-				isDeleted: true,
-			});
+			const user: UserDocument | null = await userModel.findOne({ _id: otpResult.userId, isDeleted: true });
 			if (!user) {
 				return res.status(404).json({ message: "User Not Found!" });
 			}
 			if (user.status === "active") {
-				return res
-					.status(400)
-					.json({ message: "Account is already recovered!" });
+				return res.status(400).json({ message: "Account is already recovered!" });
 			}
 			await user.restore();
 			await user.save();
-			return res.status(200).json({
-				message:
-					"Account Recovered Successfully! You can now login to your account!",
-			});
+			return res.status(200).json({ message: "Account Recovered Successfully! You can now login to your account!" });
 		} else {
 			return res
 				.status(403)
@@ -972,41 +845,22 @@ export async function resendOtpController(
 	try {
 		const purpose = req.query.purpose;
 		const { email }: z.infer<typeof otpResendSchema> = req.body;
+		if (!purpose || typeof purpose !== "string") {
+			return res.status(400).json({ message: "OTP purpose is required!" });
+		}
 		const user: UserDocument | null = await userModel.findOne({ email });
 		if (!user) {
 			return res.status(404).json({ message: "User Not Found!" });
 		}
-
-		const emailSubject = emailPurposeMapper(purpose as string);
-
-		const otp = generateOTP();
-		const html = getOtpHTML(otp, "resendOtp");
-
-		const mailSuccess = await sendVerificationEmail(
-			config.GMAIL_USER_EMAIL,
-			user.email,
-			emailSubject,
-			html,
-		);
-		if (!mailSuccess) {
-			return res.status(503).json({
-				message: "Failed to send OTP email. Please try again later.",
-			});
-		}
-		const otpStoreSuccess = await otpService.storeOTP(
+		const result = await sendAndStoreOTP(
 			email,
-			otp,
-			"resendOtp",
+			purpose,
 			user._id.toString(),
+			"resendOtp",
 		);
-		if (!otpStoreSuccess.success) {
-			return res.status(503).json({
-				message:
-					otpStoreSuccess.message ||
-					"Failed to store OTP. Please try again later.",
-			});
+		if (!result.success) {
+			return res.status(503).json({ message: result.message });
 		}
-
 		return res.status(200).json({
 			message: "OTP resent successfully! Please check your email.",
 		});
@@ -1089,7 +943,6 @@ export async function forgotPasswordEmailController(
 ) {
 	try {
 		const { email } = req.body;
-		const fieldToUpdate = "forgotPassword";
 		if (!email) {
 			return res.status(400).json({ message: "Email is required!" });
 		}
@@ -1097,38 +950,17 @@ export async function forgotPasswordEmailController(
 		if (!user) {
 			return res.status(404).json({ message: "User Not Found!" });
 		}
-		const otp = generateOTP();
-		const html = getOtpHTML(otp, "resetPassword");
-
-		const mailSuccess = await sendVerificationEmail(
-			config.GMAIL_USER_EMAIL,
-			user.email,
-			emailPurposeMapper(fieldToUpdate),
-			html,
-		);
-
-		if (!mailSuccess) {
-			return res.status(503).json({
-				message: "Failed to send verification email. Please try again later.",
-			});
-		}
-		const otpStoreSuccess = await otpService.storeOTP(
+		const result = await sendAndStoreOTP(
 			email,
-			otp,
-			"forgotPassword",
+			AUTH_OTP_PURPOSES.FORGOT_PASSWORD_INIT,
 			user._id.toString(),
+			"resetPassword",
 		);
-
-		if (!otpStoreSuccess.success) {
-			return res.status(500).json({
-				message: "Failed to store OTP. Please try again later.",
-				success: false,
-			});
+		if (!result.success) {
+			return res.status(503).json({ message: result.message });
 		}
-
 		return res.status(200).json({
-			message:
-				"OTP Sent to your Email! Complete OTP Verification to reset your password!",
+			message: "OTP Sent to your Email! Complete OTP Verification to reset your password!",
 			data: { email },
 		});
 	} catch (error) {
