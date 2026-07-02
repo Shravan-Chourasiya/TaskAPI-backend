@@ -4,7 +4,7 @@ import { config } from "../../../configs/app.config.js";
 import { generateOTP, getOtpHTML } from "../../../utils/nodemailer.utils.js";
 import { sendVerificationEmail } from "../../../services/nodemailer.service.js";
 import type { NextFunction, Request, Response } from "express";
-import { emailPurposeMapper } from "../utils/authcontroller.utils.js";
+import { emailPurposeMapper, sendAndStoreOTP } from "../utils/authcontroller.utils.js";
 import * as z from "zod";
 import crypto from "crypto";
 import type {
@@ -559,67 +559,20 @@ export async function updateDetailsController(
 				await user.updateOne({
 					username: newValue as z.infer<typeof usernameSchema>,
 				});
-				return res.status(200).json({
-					message: "Username updated successfully!",
-				});
+				return res.status(200).json({ message: "Username updated successfully!" });
 			case "email": {
-				const otp = generateOTP();
-				const html = getOtpHTML(otp, "verifyEmailUP");
-				const mailSuccess = await sendVerificationEmail(
-					config.GMAIL_USER_EMAIL,
-					user.email,
-					emailPurposeMapper("verifyEmailUP"),
-					html,
-				);
-				if (!mailSuccess) {
-					return res.status(503).json({
-						message:
-							"Failed to send verification email. Please try again later.",
-					});
-				}
-				const otpStoreSuccess = await otpService.storeOTP(
-					user.email,
-					otp,
-					"verifyEmailUP",
-					newValue,
-				);
-				if (!otpStoreSuccess) {
-					return res.status(500).json({
-						message: "Failed to store OTP. Please try again later.",
-					});
+				// Step 1: OTP to current email; newValue (new email) stored in Redis
+				const result = await sendAndStoreOTP(user.email, "ve-em-cu", user._id.toString(), "verifyCurrentEmail", newValue);
+				if (!result.success) {
+					return res.status(503).json({ message: result.message });
 				}
 				break;
 			}
 			case "password": {
-				const otp2 = generateOTP();
-				const html2 = getOtpHTML(otp2, "resetPassword");
-
-				const mailSuccess2 = await sendVerificationEmail(
-					config.GMAIL_USER_EMAIL,
-					user.email,
-					emailPurposeMapper("resetPassword"),
-					html2,
-				);
-
-				if (!mailSuccess2) {
-					return res.status(503).json({
-						message:
-							"Failed to send verification email. Please try again later.",
-					});
-				}
-
 				const newPasswordHash = await bcrypt.hash(newValue, 12);
-				const otpStoreSuccess = await otpService.storeOTP(
-					user.email,
-					otp2,
-					"resetPassword",
-					newPasswordHash,
-				);
-
-				if (!otpStoreSuccess) {
-					return res.status(500).json({
-						message: "Failed to store OTP. Please try again later.",
-					});
+				const result = await sendAndStoreOTP(user.email, "resetPassword", user._id.toString(), "resetPassword", newPasswordHash);
+				if (!result.success) {
+					return res.status(503).json({ message: result.message });
 				}
 				break;
 			}
@@ -627,8 +580,7 @@ export async function updateDetailsController(
 				return res.status(400).json({ message: "Invalid Field to Update!" });
 		}
 		return res.status(200).json({
-			message:
-				"Verification OTP sent to your email! Complete OTP verification to update your details!",
+			message: "OTP sent to your current email! Verify via /verify?purpose=ve-em-cu",
 		});
 	} catch (error) {
 		next(error);
@@ -866,40 +818,37 @@ export async function verificationController(
 				message:
 					"Email Verified Successfully! You can now login to your account!",
 			});
-		} else if (purposeValue === "ve-em-up") {
-			const otpResult = await otpService.verifyOTP(email, otp, "verifyEmailUP");
-
+		} else if (purposeValue === "ve-em-cu") {
+			// Step 2: verify OTP on current email → send OTP to new email
+			const otpResult = await otpService.verifyOTP(email, otp, "ve-em-cu");
 			if (!otpResult.success) {
 				return res.status(400).json({ message: otpResult.message });
 			}
-			if (!otpResult.newValue) {
-				return res
-					.status(400)
-					.json({ message: "New email value not found in OTP data." });
+			if (!otpResult.newValue || !otpResult.userId) {
+				return res.status(400).json({ message: "Invalid OTP data. Please restart the email update process." });
 			}
-			const userId = otpResult.userId;
-			if (!userId) {
-				return res.status(400).json({
-					message:
-						"Invalid OTP verification attempt.Please try registering after some Time.",
-				});
+			// Send OTP to the new email; store docId so step 3 can find the user
+			const sendResult = await sendAndStoreOTP(otpResult.newValue, "ve-em-up", otpResult.userId, "verifyEmailUP");
+			if (!sendResult.success) {
+				return res.status(503).json({ message: sendResult.message });
 			}
-			const user: UserDocument | null = await userModel.findOne({
-				_id: userId,
-			});
+			return res.status(200).json({ message: "Current email verified! OTP sent to your new email. Complete verification to update." });
+		} else if (purposeValue === "ve-em-up") {
+			// Step 3: verify OTP on new email → commit email change
+			const otpResult = await otpService.verifyOTP(email, otp, "verifyEmailUP");
+			if (!otpResult.success) {
+				return res.status(400).json({ message: otpResult.message });
+			}
+			if (!otpResult.userId) {
+				return res.status(400).json({ message: "Invalid OTP data. Please restart the email update process." });
+			}
+			const user: UserDocument | null = await userModel.findById(otpResult.userId);
 			if (!user) {
 				return res.status(404).json({ message: "User Not Found!" });
 			}
-			if (user.isVerified) {
-				return res.status(400).json({ message: "Email Already Verified!" });
-			}
-			user.email = otpResult.newValue;
-			user.isVerified = true;
+			user.email = email;
 			await user.save();
-			return res.status(200).json({
-				message:
-					"Email Updated Successfully! You can now login to your account!",
-			});
+			return res.status(200).json({ message: "Email updated successfully!" });
 		} else if (purposeValue === "re-pa") {
 			const otpResult = await otpService.verifyOTP(email, otp, "resetPassword");
 
@@ -1187,49 +1136,3 @@ export async function forgotPasswordEmailController(
 	}
 }
 
-export async function forgotPasswordUpdateController(
-	req: Request,
-	res: Response,
-	next: NextFunction,
-	userModel: Model<UserDocument, UserStaticMethods>,
-	sessionModel: SessionStaticMethods,
-) {
-	try {
-		const { userId, userEmail, newPassword } = req.body;
-		if (!userEmail || !newPassword) {
-			return res
-				.status(400)
-				.json({ message: "Email	and New Password are required!" });
-		}
-		const user: UserDocument | null = await userModel.findOne({
-			_id: userId,
-			email: userEmail,
-		});
-		if (!user) {
-			return res.status(404).json({ message: "User Not Found!" });
-		}
-		if (!user.isVerified) {
-			return res.status(400).json({ message: "Email Not Verified!" });
-		}
-		const isSameAsOldPassword = await user.isPasswordReused(newPassword);
-		if (isSameAsOldPassword) {
-			return res
-				.status(400)
-				.json({ message: "New Password cannot be same as last  password!" });
-		}
-		user.passwordHash = newPassword;
-		user.isVerified = true;
-		await sessionModel.revokeAllUserSessions(
-			user._id.toString(),
-			"Password Reset",
-		);
-		await user.save();
-		return res.status(200).json({
-			message:
-				"Password Updated Successfully! You can now login to your account!",
-			success: true,
-		});
-	} catch (error) {
-		next(error);
-	}
-}

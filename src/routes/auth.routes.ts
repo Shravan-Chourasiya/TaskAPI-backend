@@ -7,12 +7,9 @@ import {
 } from "../middlewares/tokenhandler.middleware.js";
 import { ZodValidatorMiddleware } from "../middlewares/zodvalidation.middleware.js";
 import {
-	forgotPasswordUpdateSchema,
 	loginDeleteRecoverAccSchema,
 	otpResendSchema,
 	otpSchema,
-	// phoneGetNumberSchema,
-	// phoneVerificationSchema,
 	registerSchema,
 	updateDetailsSchema,
 	profileUpdateSchema,
@@ -133,20 +130,7 @@ export function createAuthRouter({
 		authControllers.forgotPasswordEmailController(req, res, next, userModel),
 	);
 
-	router.post(
-		"/forgot-password/update",
-		ZodValidatorMiddleware(forgotPasswordUpdateSchema),
-		(req, res, next) =>
-			authControllers.forgotPasswordUpdateController(
-				req,
-				res,
-				next,
-				userModel,
-				sessionModel,
-			),
-	);
-
-	router.post("/token/refresh", refreshTokenHandler, (req, res, next) =>
+router.post("/token/refresh", refreshTokenHandler, (req, res, next) =>
 		authControllers.tokenRotationController(
 			req,
 			res,

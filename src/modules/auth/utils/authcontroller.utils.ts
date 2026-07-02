@@ -1,3 +1,32 @@
+import { config } from "../../../configs/app.config.js";
+import { sendVerificationEmail } from "../../../services/nodemailer.service.js";
+import { otpService } from "../../../services/redisotp.service.js";
+import { generateOTP, getOtpHTML } from "../../../utils/nodemailer.utils.js";
+
+export async function sendAndStoreOTP(
+	email: string,
+	purpose: string,
+	docId: string,
+	htmlTemplate: string,
+	newValue?: string,
+): Promise<{ success: boolean; message?: string }> {
+	const otp = generateOTP();
+	const html = getOtpHTML(otp, htmlTemplate);
+	const subject = emailPurposeMapper(purpose);
+
+	const mailSent = await sendVerificationEmail(
+		config.GMAIL_USER_EMAIL,
+		email,
+		subject,
+		html,
+	);
+	if (!mailSent) {
+		return { success: false, message: "Failed to send email. Please try again later." };
+	}
+
+	return otpService.storeOTP(email, otp, purpose, docId, newValue);
+}
+
 export const emailPurposeMapper = (purpose: string): string => {
 	switch (purpose) {
 		case "verifyEmailOR":
