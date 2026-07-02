@@ -67,45 +67,6 @@ export function createApiKeyRouter({
 				apiKeyModel,
 			),
 	);
-	router.patch(
-		"/update/name",
-		apiKeyUpdateLimiter,
-		ZodValidatorMiddleware(updateApiKeySchema),
-		(req, res, next) =>
-			apiKeyController.updateApiKeyNameController(
-				req,
-				res,
-				next,
-				userModel,
-				apiKeyModel,
-			),
-	);
-	router.patch(
-		"/update/scopes",
-		apiKeyUpdateLimiter,
-		ZodValidatorMiddleware(updateApiKeySchema),
-		(req, res, next) =>
-			apiKeyController.updateApiKeyScopesController(
-				req,
-				res,
-				next,
-				userModel,
-				apiKeyModel,
-			),
-	);
-	router.patch(
-		"/update/ips",
-		apiKeyUpdateLimiter,
-		ZodValidatorMiddleware(updateApiKeySchema),
-		(req, res, next) =>
-			apiKeyController.updateApiKeyIPWhiteListController(
-				req,
-				res,
-				next,
-				userModel,
-				apiKeyModel,
-			),
-	);
 
 	router.delete("/delete/:keyId", generalApiKeyLimiter, (req, res, next) =>
 		apiKeyController.deleteApiKeyController(

@@ -4,10 +4,7 @@ import jwt from "jsonwebtoken";
 import { config } from "../../../configs/app.config.js";
 import {
 	apiKeyCreationSchema,
-	updateApiIPWhiteListSchema,
 	updateApiKeySchema,
-	updateApiNameSchema,
-	updateApiScopesSchema,
 } from "../../../libs/zod/apikey.zodschema.js";
 import * as z from "zod";
 import crypto from "crypto";
@@ -57,7 +54,6 @@ export const createApiKeyController = async (
 		) as JwtPayload;
 
 		const userId = decoded.id;
-		console.log("#####1:Decoded JWT payload:", decoded, userId);
 		const user: UserDocument | null = await userModel.findById(userId);
 
 		if (!user) {
@@ -73,14 +69,11 @@ export const createApiKeyController = async (
 				.json(
 					standardResponse(
 						false,
-						"User subscription has expired, cannot create new API keys",
+						"User subscription Not found, cannot create new API keys",
 					),
 				);
 		}
-		console.log(
-			`#####2: User subscription type: ${user.subscriptionType}, API key count: ${user.apiKeyCount} #####`,
-		);
-		if (user.subscriptionType === "Free" && user.apiKeyCount >= 5) {
+			if (user.subscriptionType === "Free" && user.apiKeyCount >= 5) {
 			return res
 				.status(400)
 				.json(standardResponse(false, "Free users can only create 5 API keys"));
@@ -112,15 +105,12 @@ export const createApiKeyController = async (
 		}
 		const apiKeyValue = `tk_${env}_${crypto.randomBytes(16).toString("hex")}`;
 
-		console.log(
-			"#####3: User passed all checks, proceeding to create API key with value:",
-			apiKeyValue,
-		);
+	
 
 		const apiKey: ApiKeyDocument = await apiKeyModel.create({
 			userId,
 			name,
-			description,
+			...(description !== undefined && { description }),
 			keyHash: apiKeyValue,
 			keyPrefix: apiKeyValue.slice(0, 8),
 			keyHint: apiKeyValue.slice(-4),
@@ -134,10 +124,7 @@ export const createApiKeyController = async (
 
 		user.apiKeyCount = (user.apiKeyCount || 0) + 1;
 		await user.save();
-		console.log(
-			"#####4: API key created successfully with value:",
-			apiKeyValue,
-		);
+	
 		return res.status(201).json(
 			standardResponse(true, "API key created successfully", {
 				apiKey: apiKeyValue,
@@ -321,151 +308,3 @@ export const updateApiKeyController = async (
 	}
 };
 
-export const updateApiKeyNameController = async (
-	req: Request,
-	res: Response,
-	next: NextFunction,
-	userModel: Model<UserDocument, UserStaticMethods>,
-	apiKeyModel: Model<ApiKeyDocument, ApiKeyStaticMethods>,
-) => {
-	try {
-		const { keyId, newName }: z.infer<typeof updateApiNameSchema> = req.body;
-		if (!keyId || !newName) {
-			return res
-				.status(400)
-				.json(standardResponse(false, "keyId and newName are required"));
-		}
-		if (!mongoose.Types.ObjectId.isValid(keyId)) {
-			return res
-				.status(400)
-				.json(standardResponse(false, "Invalid keyId format"));
-		}
-
-		if (!req.cookies.acToken) {
-			return res.status(401).json(standardResponse(false, "Unauthorized"));
-		}
-
-		const decoded = jwt.verify(
-			req.cookies.acToken,
-			config.ACCESS_TOKEN_JWT_SECRET,
-		) as JwtPayload;
-		const apikey = await apiKeyModel
-			.findOneAndUpdate(
-				{ _id: keyId, userId: decoded.id },
-				{ $set: { name: newName } },
-				{ new: true, runValidators: true },
-			)
-			.lean();
-		if (!apikey) {
-			return res.status(404).json(standardResponse(false, "API key not found"));
-		}
-		return res.status(200).json(
-			standardResponse(true, "API key name updated successfully", {
-				updateStatus: "success",
-				apikey,
-			}),
-		);
-	} catch (error) {
-		next(error);
-	}
-};
-
-export const updateApiKeyScopesController = async (
-	req: Request,
-	res: Response,
-	next: NextFunction,
-	userModel: Model<UserDocument, UserStaticMethods>,
-	apiKeyModel: Model<ApiKeyDocument, ApiKeyStaticMethods>,
-) => {
-	try {
-		const { keyId, newScopes }: z.infer<typeof updateApiScopesSchema> =
-			req.body;
-		if (!keyId || !newScopes) {
-			return res
-				.status(400)
-				.json(standardResponse(false, "keyId and newScopes are required"));
-		}
-		if (!mongoose.Types.ObjectId.isValid(keyId)) {
-			return res
-				.status(400)
-				.json(standardResponse(false, "Invalid keyId format"));
-		}
-
-		if (!req.cookies.acToken) {
-			return res.status(401).json(standardResponse(false, "Unauthorized"));
-		}
-
-		const decoded = jwt.verify(
-			req.cookies.acToken,
-			config.ACCESS_TOKEN_JWT_SECRET,
-		) as JwtPayload;
-		const apikey = await apiKeyModel
-			.findOneAndUpdate(
-				{ _id: keyId, userId: decoded.id },
-				{ $set: { scopes: newScopes } },
-				{ new: true, runValidators: true },
-			)
-			.lean();
-		if (!apikey) {
-			return res.status(404).json(standardResponse(false, "API key not found"));
-		}
-		return res.status(200).json(
-			standardResponse(true, "API key scopes updated successfully", {
-				updateStatus: "success",
-				apikey,
-			}),
-		);
-	} catch (error) {
-		next(error);
-	}
-};
-
-export const updateApiKeyIPWhiteListController = async (
-	req: Request,
-	res: Response,
-	next: NextFunction,
-	userModel: Model<UserDocument, UserStaticMethods>,
-	apiKeyModel: Model<ApiKeyDocument, ApiKeyStaticMethods>,
-) => {
-	try {
-		const { keyId, newIPs }: z.infer<typeof updateApiIPWhiteListSchema> =
-			req.body;
-		if (!keyId || !newIPs) {
-			return res
-				.status(400)
-				.json(standardResponse(false, "keyId and newIPs are required"));
-		}
-		if (!mongoose.Types.ObjectId.isValid(keyId)) {
-			return res
-				.status(400)
-				.json(standardResponse(false, "Invalid keyId format"));
-		}
-
-		if (!req.cookies.acToken) {
-			return res.status(401).json(standardResponse(false, "Unauthorized"));
-		}
-
-		const decoded = jwt.verify(
-			req.cookies.acToken,
-			config.ACCESS_TOKEN_JWT_SECRET,
-		) as JwtPayload;
-		const apikey = await apiKeyModel
-			.findOneAndUpdate(
-				{ _id: keyId, userId: decoded.id },
-				{ $set: { allowedIPs: newIPs } },
-				{ new: true, runValidators: true },
-			)
-			.lean();
-		if (!apikey) {
-			return res.status(404).json(standardResponse(false, "API key not found"));
-		}
-		return res.status(200).json(
-			standardResponse(true, "API key IP whitelist updated successfully", {
-				updateStatus: "success",
-				apikey,
-			}),
-		);
-	} catch (error) {
-		next(error);
-	}
-};

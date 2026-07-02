@@ -598,7 +598,7 @@ components:
           additionalProperties: true
     CreateApiKeyRequest:
       type: object
-      required: [name, description, env, scopes, allowedIPs]
+      required: [name, env, scopes, allowedIPs]
       properties:
         name:
           type: string
