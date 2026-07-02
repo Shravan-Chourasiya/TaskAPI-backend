@@ -1,7 +1,11 @@
+import { AUTH_OTP_PURPOSES, APP_REDIS_PREFIXES } from "../../../constants.js";
 import { config } from "../../../configs/app.config.js";
 import { sendVerificationEmail } from "../../../services/nodemailer.service.js";
 import { otpService } from "../../../services/redisotp.service.js";
 import { generateOTP, getOtpHTML } from "../../../utils/nodemailer.utils.js";
+
+export const OTP_PREFIX = APP_REDIS_PREFIXES.OTP_STORAGE;
+export { AUTH_OTP_PURPOSES };
 
 export async function sendAndStoreOTP(
 	email: string,

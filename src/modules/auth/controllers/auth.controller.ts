@@ -28,6 +28,7 @@ import {
 	SessionStaticMethods,
 } from "../../../types/mongoModels/session.type.js";
 import { Model } from "mongoose";
+import { generateOTP } from "../../../utils/nodemailer.utils.js";
 
 export async function registerController(
 	req: Request,
@@ -85,7 +86,7 @@ export async function registerController(
 		const result = await sendAndStoreOTP(
 			email,
 			AUTH_OTP_PURPOSES.VERIFY_EMAIL_REGISTER,
-			user[0]?._id.toString(),
+			String(user[0]?._id.toString()),
 			"verifyEmailOR",
 		);
 		if (!result.success) {
