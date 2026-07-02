@@ -87,6 +87,19 @@ export const USER_LIMITS = {
 	NAME_MAX_LENGTH: 50,
 } as const;
 
+// ============ AUTH OTP PURPOSES ============
+export const AUTH_OTP_PURPOSES = {
+	VERIFY_EMAIL_REGISTER: "ve-em-or",
+	VERIFY_CURRENT_EMAIL:  "ve-em-cu",
+	VERIFY_NEW_EMAIL:      "ve-em-up",
+	RESET_PASSWORD:        "re-pa",
+	FORGOT_PASSWORD:       "fr-pa",
+	ACCOUNT_RECOVERY:      "ac-re",
+	FORGOT_PASSWORD_INIT:  "forgotPassword",
+} as const;
+
+export type AuthOtpPurpose = typeof AUTH_OTP_PURPOSES[keyof typeof AUTH_OTP_PURPOSES];
+
 // ============ CLIENT OTP PURPOSES ============
 export const CLIENT_OTP_PURPOSES = {
 	VERIFY_EMAIL_REGISTER: "ve-em-or",   // verify email on registration
