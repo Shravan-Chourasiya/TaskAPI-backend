@@ -95,7 +95,6 @@ export function createClientUserRouter({
 	// Unified verify endpoint — ?purpose= one of CLIENT_OTP_PURPOSES values.
 	// createPurposeValidatorMiddleware validates the purpose param and runs the
 	// matching Zod body schema before the controller.
-
 	router.post(
 		"/verify",
 		clientOtpVerificationLimiter,

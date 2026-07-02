@@ -73,7 +73,7 @@ export async function registerController(
 		}
 
 		return res.status(201).json(standardResponse(true, "Registered successfully. Verification OTP sent to your email.", {
-			docId: doc._id,
+			Id: doc._id,
 		}));
 	} catch (error) {
 		next(error);
@@ -146,7 +146,7 @@ export async function loginController(
 		);
 
 		return res.status(200).json(standardResponse(true, "Login successful", {
-			docId: user._id,
+			Id: user._id,
 			email: user.email,
 			username: user.username,
 			role: user.role,
@@ -166,15 +166,15 @@ export async function logoutController(
 	userModel: UserModel,
 ) {
 	try {
-		const { docId } = req.body as { docId: string };
+		const { Id } = req.body as { Id: string };
 		const clientId = req.apiOwnerId!;
 
-		if (!docId) {
-			return res.status(400).json(standardResponse(false, "docId is required"));
+		if (!Id) {
+			return res.status(400).json(standardResponse(false, "Id is required"));
 		}
 
 		await userModel.findOneAndUpdate(
-			{ clientId, _id: docId },
+			{ clientId, _id: Id },
 			{ $set: { lastActiveAt: new Date() } },
 		);
 
@@ -189,7 +189,7 @@ export async function logoutController(
 //   ve-em-or  → verify email on registration      body: { email, otp }
 //   ve-em-up  → verify new email after update     body: { newEmail, otp }
 //   fr-pa     → forgot-password OTP + reset       body: { email, otp, newPassword }
-//   up-pa     → authenticated password update     body: { docId, otp, newPassword }
+//   up-pa     → authenticated password update     body: { Id, otp, newPassword }
 //   ac-re     → account recovery OTP              body: { email, otp }
 // User lookup + state checks run BEFORE Redis OTP verify in every case.
 
