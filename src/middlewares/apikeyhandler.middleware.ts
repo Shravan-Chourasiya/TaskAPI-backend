@@ -8,6 +8,7 @@ import {
 
 type RequestWithApiOwner = Request & {
 	apiOwnerId?: string;
+	apiKeyId?:   string;
 };
 
 export const apikeyHandlerFunction = async (
@@ -59,8 +60,9 @@ export const apikeyHandlerFunction = async (
 			.json(standardResponse(false, "Unauthorized: Invalid API key"));
 	}
 
-	// Attach owner's userId to request for downstream controllers
+	// Attach owner's userId and key's own id to request for downstream use
 	req.apiOwnerId = apiKeyDoc.userId.toString();
+	req.apiKeyId   = String((apiKeyDoc._id as { toString(): string }).toString());
 
 	next();
 };

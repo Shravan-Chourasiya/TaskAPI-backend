@@ -15,6 +15,8 @@ import { initSessionModel } from "./modules/auth/models/session.schema.js";
 import { initApiKeyModel } from "./modules/auth/models/apikey.schema.js";
 import { initSubscriptionModel } from "./modules/auth/models/subscription.schema.js";
 import { initClientUserModel } from "./modules/clientauth/schemas/userMongo.schema.js";
+import { initRawEventModel } from "./modules/metrics/models/rawEvent.schema.js";
+import { createMetricsMiddleware } from "./middlewares/metricsCollector.middleware.js";
 
 const app = express();
 
@@ -32,6 +34,7 @@ const sessionModel = initSessionModel(TaskapiDb);
 const apiKeyModel = initApiKeyModel(TaskapiDb);
 const subscriptionModel = initSubscriptionModel(TaskapiDb);
 const clientUserModel = initClientUserModel(TaskapiClientsDb);
+const rawEventModel   = initRawEventModel(TaskapiDb);
 const clientUsersStoreModel = clientUserModel; // alias kept for readability during transition
 const authRouter: express.Router = createAuthRouter({
 	userModel,
@@ -63,6 +66,7 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(morgan(config.NODE_ENV === "production" ? "combined" : "development"));
 app.use(cors(corsOptions));
+app.use(createMetricsMiddleware(rawEventModel));
 
 app.use("/api/v1/auth", apiRateLimiter, authRouter);
 app.use("/api/v1/", apiRateLimiter, generalRouter);
