@@ -44,7 +44,7 @@ const rawEventSchema = new mongoose.Schema<RawEventDocument>(
 	{
 		// No _id auto-generation overhead — time-series collections manage
 		// their own internal _id on the bucket documents.
-		_id: false,
+		// _id: false,
 		// Disable Mongoose timestamps; we manage `timestamp` explicitly.
 		timestamps: false,
 		collection: "api_raw_events",

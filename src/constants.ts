@@ -1,3 +1,7 @@
+// ============ URL CONSTANTS ============
+export const BASE_URL="/api/v1";
+
+
 // ============ RATE LIMITING ============
 const contants = {
 	GENERAL_API_RL_TIME_WINDOW_MS: 15 * 60 * 1000,
@@ -12,13 +16,13 @@ const contants = {
 	PROFILE_UPDATE_RATE_LIMIT_MAX: 1,
 	PROFILE_UPDATE_RL_TIME_WINDOW_MS: 2 * 60 * 1000,
 
-	APIKEY_CREATION_RATE_LIMIT_MAX: 1,
+	APIKEY_CREATION_RATE_LIMIT_MAX: 100,
 	APIKEY_CREATION_RL_TIME_WINDOW_MS: 5 * 60 * 1000,
 
-	GENERAL_APIKEY_RATE_LIMIT_MAX: 5,
+	GENERAL_APIKEY_RATE_LIMIT_MAX: 500,
 	GENERAL_APIKEY_RL_TIME_WINDOW_MS: 10 * 60 * 1000,
 
-	APIKEY_UPDATE_RATE_LIMIT_MAX: 5,
+	APIKEY_UPDATE_RATE_LIMIT_MAX: 50,
 	APIKEY_UPDATE_RL_TIME_WINDOW_MS: 10 * 60 * 1000,
 
 	APIKEY_USAGE_RATE_LIMIT_MAX: 50,
@@ -114,6 +118,13 @@ export type ClientOtpPurpose = typeof CLIENT_OTP_PURPOSES[keyof typeof CLIENT_OT
 
 // ============ CLIENT OTP TTL ============
 export const CLIENT_OTP_TTL_SECONDS = 600; // 10 minutes
+
+// ============ METRICS ============
+export const METRICS_CONSTANTS = {
+	RAW_EVENT_TTL_SECONDS:      90 * 24 * 60 * 60, // 90 days
+	USER_AGENT_MAX_LENGTH:      200,
+	ERROR_LABEL_MAX_LENGTH:     100,
+} as const;
 
 // ============ REDIS PREFIXES ============
 export const APP_REDIS_PREFIXES = {

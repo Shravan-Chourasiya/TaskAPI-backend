@@ -17,25 +17,43 @@ import { initSubscriptionModel } from "./modules/auth/models/subscription.schema
 import { initClientUserModel } from "./modules/clientauth/schemas/userMongo.schema.js";
 import { initRawEventModel } from "./modules/metrics/models/rawEvent.schema.js";
 import { createMetricsMiddleware } from "./middlewares/metricsCollector.middleware.js";
+import { BASE_URL } from "./constants.js";
+
+// =================== Server Initialization ===================
 
 const app = express();
 
-// const PostgresDbConn = getPgPool();
-// const postgresConnectionResult = await testPgConnection();
 
+
+// =================== Database Initializations ===================
+
+//const PostgresDbConn = getPgPool();
+//const postgresConnectionResult = await testPgConnection();
 const mongoClusterConn = await dbConnect();
 const TaskapiDb = getDbConnection(config.DB_NAME, mongoClusterConn);
 const TaskapiClientsDb = getDbConnection(
 	config.CLIENT_DB_NAME,
 	mongoClusterConn,
 );
+
+
+
+// =================== Db Models Initializations ===================
+
 const userModel = initUserModel(TaskapiDb);
 const sessionModel = initSessionModel(TaskapiDb);
 const apiKeyModel = initApiKeyModel(TaskapiDb);
 const subscriptionModel = initSubscriptionModel(TaskapiDb);
 const clientUserModel = initClientUserModel(TaskapiClientsDb);
-const rawEventModel   = initRawEventModel(TaskapiDb);
-const clientUsersStoreModel = clientUserModel; // alias kept for readability during transition
+const rawEventsClientModel   = initRawEventModel(TaskapiDb);
+//alias kept for readability during transition
+const clientUsersStoreModel = clientUserModel; 
+
+
+
+
+// =================== Api Routers Initialization ===================
+
 const authRouter: express.Router = createAuthRouter({
 	userModel,
 	sessionModel,
@@ -56,22 +74,37 @@ const clientUserRouter: express.Router = createClientUserRouter({
 });
 
 
+
+// =================== Cors Configuration ===================
+
 const corsOptions = {
 	origin: config.ALLOWED_ORIGINS,
 	credentials: true,
-	optionsSuccessStatus: 200, // some legacy browsers (IE11, various SmartTVs) choke on 204
+	//some legacy browsers (IE11, various SmartTVs) choke on 204
+	optionsSuccessStatus: 200,
 };
+
+
+
+// =================== Server level Middlwares ===================
 
 app.use(express.json());
 app.use(cookieParser());
 app.use(morgan(config.NODE_ENV === "production" ? "combined" : "development"));
 app.use(cors(corsOptions));
-app.use(createMetricsMiddleware(rawEventModel));
+app.use(createMetricsMiddleware(rawEventsClientModel));
 
-app.use("/api/v1/auth", apiRateLimiter, authRouter);
-app.use("/api/v1/", apiRateLimiter, generalRouter);
-app.use("/api/v1/subscription", apiRateLimiter, subscriptionRouter);
-app.use("/api/v1/api-keys", apiRateLimiter, apiKeyRouter);
-app.use("/api/v1/client/auth", apiRateLimiter, clientUserRouter);
+
+
+
+// =================== Routes Integration ===================
+
+app.use(`${BASE_URL}/auth`, apiRateLimiter, authRouter);
+app.use(`${BASE_URL}/subscription`, apiRateLimiter, subscriptionRouter);
+app.use(`${BASE_URL}/api-keys`, apiRateLimiter, apiKeyRouter);
+app.use(`${BASE_URL}/client/auth`, apiRateLimiter, clientUserRouter);
+
+app.use(`${BASE_URL}/`, apiRateLimiter, generalRouter);
+
 
 export { app };
