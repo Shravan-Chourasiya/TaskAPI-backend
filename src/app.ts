@@ -18,6 +18,10 @@ import { initClientUserModel } from "./modules/clientauth/schemas/userMongo.sche
 import { initRawEventModel } from "./modules/metrics/models/rawEvent.schema.js";
 import { createMetricsMiddleware } from "./middlewares/metricsCollector.middleware.js";
 import { BASE_URL } from "./constants.js";
+import { initWatermarkModel } from "./modules/metrics/models/watermark.schema.js";
+import { createRollupModels } from "./modules/metrics/models/rollupData.schema.js";
+import { initRollupWorkers } from "./libs/bullmq/workers/metricsWorker.js";
+import { createRollupProcessor } from "./libs/bullmq/controllers/metricsworkers.controller.js";
 
 // =================== Server Initialization ===================
 
@@ -45,9 +49,17 @@ const sessionModel = initSessionModel(TaskapiDb);
 const apiKeyModel = initApiKeyModel(TaskapiDb);
 const subscriptionModel = initSubscriptionModel(TaskapiDb);
 const clientUserModel = initClientUserModel(TaskapiClientsDb);
-const rawEventsClientModel   = initRawEventModel(TaskapiDb);
+const rawEventsClientModel             = initRawEventModel(TaskapiDb);
+const watermarkModel                   = initWatermarkModel(TaskapiDb);
+const { Rollup5m, Rollup1h, Rollup1d } = createRollupModels(TaskapiDb);
 //alias kept for readability during transition
-const clientUsersStoreModel = clientUserModel; 
+const clientUsersStoreModel = clientUserModel;
+
+initRollupWorkers(
+	{ watermarkModel, rawEventModel: rawEventsClientModel, rollup5mModel: Rollup5m, rollup1hModel: Rollup1h, rollup1dModel: Rollup1d },
+	createRollupProcessor,
+);
+
 
 
 
