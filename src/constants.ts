@@ -1,6 +1,5 @@
 // ============ URL CONSTANTS ============
-export const BASE_URL="/api/v1";
-
+export const BASE_URL = "/api/v1";
 
 // ============ RATE LIMITING ============
 const contants = {
@@ -34,10 +33,10 @@ export const AUTH_CONSTANTS = {
 	ACCESS_TOKEN_EXPIRY: "10m",
 	REFRESH_TOKEN_EXPIRY: "7d",
 	MAX_ACTIVE_SESSIONS: 5,
-	FAILED_LOGIN_THRESHOLD_LOCK: 5,        // lock for LOCK_DURATION_MS
-	FAILED_LOGIN_THRESHOLD_TEMP_LOCK: 8,   // escalate to TEMP_LOCK_DURATION_MS
-	FAILED_LOGIN_THRESHOLD_PERM_LOCK: 12,  // escalate to PERM_LOCK_DURATION_MS + suspend
-	LOCK_DURATION_MS: 15 * 60 * 1000,      // 15 minutes
+	FAILED_LOGIN_THRESHOLD_LOCK: 5, // lock for LOCK_DURATION_MS
+	FAILED_LOGIN_THRESHOLD_TEMP_LOCK: 8, // escalate to TEMP_LOCK_DURATION_MS
+	FAILED_LOGIN_THRESHOLD_PERM_LOCK: 12, // escalate to PERM_LOCK_DURATION_MS + suspend
+	LOCK_DURATION_MS: 15 * 60 * 1000, // 15 minutes
 	TEMP_LOCK_DURATION_MS: 60 * 60 * 1000, // 1 hour
 	PERM_LOCK_DURATION_MS: 24 * 60 * 60 * 1000, // 24 hours
 	BCRYPT_SALT_ROUNDS: 12,
@@ -55,9 +54,9 @@ export const FILE_UPLOAD_CONSTANTS = {
 
 // ============ SUBSCRIPTION ============
 export const SUBSCRIPTION_PLANS = {
-	Free:  { price: 0,  duration: 12, autoRenew: false },
-	Basic: { price: 5,  duration: 12, autoRenew: true  },
-	Pro:   { price: 15, duration: 12, autoRenew: true  },
+	Free: { price: 0, duration: 12, autoRenew: false },
+	Basic: { price: 5, duration: 12, autoRenew: true },
+	Pro: { price: 15, duration: 12, autoRenew: true },
 } as const;
 
 export const SUBSCRIPTION_CONSTANTS = {
@@ -94,36 +93,38 @@ export const USER_LIMITS = {
 // ============ AUTH OTP PURPOSES ============
 export const AUTH_OTP_PURPOSES = {
 	VERIFY_EMAIL_REGISTER: "ve-em-or",
-	VERIFY_CURRENT_EMAIL:  "ve-em-cu",
-	VERIFY_NEW_EMAIL:      "ve-em-up",
-	RESET_PASSWORD:        "re-pa",
-	FORGOT_PASSWORD:       "fr-pa",
-	ACCOUNT_RECOVERY:      "ac-re",
-	FORGOT_PASSWORD_INIT:  "forgotPassword",
+	VERIFY_CURRENT_EMAIL: "ve-em-cu",
+	VERIFY_NEW_EMAIL: "ve-em-up",
+	RESET_PASSWORD: "re-pa",
+	FORGOT_PASSWORD: "fr-pa",
+	ACCOUNT_RECOVERY: "ac-re",
+	FORGOT_PASSWORD_INIT: "forgotPassword",
 } as const;
 
-export type AuthOtpPurpose = typeof AUTH_OTP_PURPOSES[keyof typeof AUTH_OTP_PURPOSES];
+export type AuthOtpPurpose =
+	(typeof AUTH_OTP_PURPOSES)[keyof typeof AUTH_OTP_PURPOSES];
 
 // ============ CLIENT OTP PURPOSES ============
 export const CLIENT_OTP_PURPOSES = {
-	VERIFY_EMAIL_REGISTER: "ve-em-or",   // verify email on registration
-	VERIFY_CURRENT_EMAIL:  "ve-em-cu",   // step 1 email update: confirm current email
-	VERIFY_NEW_EMAIL:      "ve-em-up",   // step 2 email update: verify new email
-	FORGOT_PASSWORD:       "fr-pa",      // forgot password OTP + reset
-	UPDATE_PASSWORD:       "up-pa",      // authenticated password update OTP
-	ACCOUNT_RECOVERY:      "ac-re",      // recover soft-deleted account
+	VERIFY_EMAIL_REGISTER: "ve-em-or", // verify email on registration
+	VERIFY_CURRENT_EMAIL: "ve-em-cu", // step 1 email update: confirm current email
+	VERIFY_NEW_EMAIL: "ve-em-up", // step 2 email update: verify new email
+	FORGOT_PASSWORD: "fr-pa", // forgot password OTP + reset
+	UPDATE_PASSWORD: "up-pa", // authenticated password update OTP
+	ACCOUNT_RECOVERY: "ac-re", // recover soft-deleted account
 } as const;
 
-export type ClientOtpPurpose = typeof CLIENT_OTP_PURPOSES[keyof typeof CLIENT_OTP_PURPOSES];
+export type ClientOtpPurpose =
+	(typeof CLIENT_OTP_PURPOSES)[keyof typeof CLIENT_OTP_PURPOSES];
 
 // ============ CLIENT OTP TTL ============
 export const CLIENT_OTP_TTL_SECONDS = 600; // 10 minutes
 
 // ============ METRICS ============
 export const METRICS_CONSTANTS = {
-	RAW_EVENT_TTL_SECONDS:      90 * 24 * 60 * 60, // 90 days
-	USER_AGENT_MAX_LENGTH:      200,
-	ERROR_LABEL_MAX_LENGTH:     100,
+	RAW_EVENT_TTL_SECONDS: 90 * 24 * 60 * 60, // 90 days
+	USER_AGENT_MAX_LENGTH: 200,
+	ERROR_LABEL_MAX_LENGTH: 100,
 } as const;
 
 // ============ REDIS PREFIXES ============
@@ -151,6 +152,45 @@ export const CLIENT_REDIS_PREFIXES = {
 	SESSION: "client:session:",
 } as const;
 
-
+// ============ BULLMQ CONSTANTS ============
+export const BULLMQ_CONSTANTS = {
+	QUEUE_NAMES: {
+		ROLLUP_5M: "rollup_5m",
+		ROLLUP_1H: "rollup_1h",
+		ROLLUP_1D: "rollup_1d",
+	},
+	QUEUE_CONFIG: {
+		ATTEMPTS: 5,
+		BACKOFF_TYPE: "exponential",
+		BACKOFF_DELAY: 1000,
+		REMOVE_ON_COMPLETE_COUNT: 100,
+		REMOVE_ON_COMPLETE_AGE: 86400,   // 1 day in seconds
+		REMOVE_ON_FAIL_COUNT: 50,
+		REMOVE_ON_FAIL_AGE: 604800,      // 7 days in seconds
+	},
+	WORKER_NAMES: {
+		ROLLUP_5M: "rollupWorker_5m",
+		ROLLUP_1H: "rollupWorker_1h",
+		ROLLUP_1D: "rollupWorker_1d",
+	},
+	WORKER_CONFIG: {
+		CONCURRENCY: 1,          // watermark-based: must be 1 to prevent window overlap
+		REMOVE_ON_COMPLETE_LIMIT: 50,
+		REMOVE_ON_FAIL_LIMIT: 50,
+		STALLED_INTERVAL_MS: 30_000,
+		MAX_STALLED_COUNT: 2,
+	},
+	ROLLUP_JOB_NAMES: {
+		ROLLUP_5M: "rollup_5m",
+		ROLLUP_1H: "rollup_1h",
+		ROLLUP_1D: "rollup_1d",
+	},
+	SAFETY_BUFFER_MS: 15_000,           // 15s — avoids rolling up a window before all raw events land
+	RETENTION_MS: {
+		"5m": 72  * 60 * 60 * 1000,      // 72 hours
+		"1h": 168 * 60 * 60 * 1000,      // 7 days
+		"1d": 180 * 24 * 60 * 60 * 1000, // ~6 months
+	},
+} as const;
 
 export default contants;
