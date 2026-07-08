@@ -8,6 +8,10 @@ import type { RawEventDocument } from "../../../modules/metrics/types/rawEvent.t
 
 const { WORKER_CONFIG, QUEUE_NAMES, WORKER_NAMES, ROLLUP_JOB_NAMES } = BULLMQ_CONSTANTS;
 
+// Strip app-level redis options that conflict with BullMQ's internal connection
+const { lazyConnect: _lc, maxRetriesPerRequest: _mr, ...baseRedisConfig } = redisConfig as any;
+const bullmqConnection = { ...baseRedisConfig, maxRetriesPerRequest: null };
+
 // ─── Processor deps ───────────────────────────────────────────────────────────
 // Each tier receives only the models it actually needs.
 // 5m: reads rawEventModel  → writes targetRollupModel
@@ -35,7 +39,7 @@ interface TierWorkerConfig {
 
 function initTierWorker({ queueName, workerName, processorFactory, deps }: TierWorkerConfig): Worker {
 	const worker = new Worker(queueName, processorFactory(deps), {
-		connection:       { ...redisConfig, maxRetriesPerRequest: null },
+		connection:       bullmqConnection,
 		name:             workerName,
 		concurrency:      WORKER_CONFIG.CONCURRENCY,
 		removeOnComplete: { count: WORKER_CONFIG.REMOVE_ON_COMPLETE_LIMIT },
