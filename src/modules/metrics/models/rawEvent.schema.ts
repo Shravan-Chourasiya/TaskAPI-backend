@@ -1,11 +1,15 @@
 import mongoose from "mongoose";
-import type { RawEventDocument, RawEventModel } from "../types/rawEvent.type.js";
+import type {
+	RawEventDocument,
+	RawEventModel,
+} from "../types/rawEvent.type.js";
 import { METRICS_CONSTANTS } from "../../../constants.js";
 
 // ─── TTL ──────────────────────────────────────────────────────────────────────
 // Raw events are high-volume; retain for 90 days then let MongoDB purge them.
 // Rollup buckets (Phase 3+) carry the long-term history.
-const { RAW_EVENT_TTL_SECONDS, USER_AGENT_MAX_LENGTH, ERROR_LABEL_MAX_LENGTH } = METRICS_CONSTANTS;
+const { RAW_EVENT_TTL_SECONDS, USER_AGENT_MAX_LENGTH, ERROR_LABEL_MAX_LENGTH } =
+	METRICS_CONSTANTS;
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 // NOTE: For a time-series collection the schema is applied to the backing
@@ -16,18 +20,18 @@ const rawEventSchema = new mongoose.Schema<RawEventDocument>(
 	{
 		// ── Time-series fields ────────────────────────────────────────────────
 		timestamp: { type: Date, required: true },
-		apiKeyId:  { type: String, required: true },   // metaField
+		apiKeyId: { type: String, required: true }, // metaField
 
 		// ── Dimensions ───────────────────────────────────────────────────────
-		ownerId:        { type: String, required: true },
-		route:          { type: String, required: true },
-		method:         {
+		ownerId: { type: String, required: true },
+		route: { type: String, required: true },
+		method: {
 			type: String,
 			required: true,
 			enum: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
 		},
 		httpStatusCode: { type: Number, required: true },
-		statusClass:    {
+		statusClass: {
 			type: String,
 			required: true,
 			enum: ["2xx", "3xx", "4xx", "5xx"],
@@ -38,8 +42,8 @@ const rawEventSchema = new mongoose.Schema<RawEventDocument>(
 
 		// ── Optional enrichment ──────────────────────────────────────────────
 		userAgent: { type: String, maxlength: USER_AGENT_MAX_LENGTH },
-		ip:        { type: String },
-		error:     { type: String, maxlength: ERROR_LABEL_MAX_LENGTH },
+		ip: { type: String },
+		error: { type: String, maxlength: ERROR_LABEL_MAX_LENGTH },
 	},
 	{
 		// No _id auto-generation overhead — time-series collections manage
@@ -76,8 +80,8 @@ export function initRawEventModel(db: mongoose.Connection): RawEventModel {
 	// createCollection is a no-op if the collection already exists.
 	db.createCollection("api_raw_events", {
 		timeseries: {
-			timeField:   "timestamp",
-			metaField:   "apiKeyId",
+			timeField: "timestamp",
+			metaField: "apiKeyId",
 			granularity: "seconds",
 		},
 		// Mirror the TTL at the collection level (belt-and-suspenders).
@@ -85,9 +89,16 @@ export function initRawEventModel(db: mongoose.Connection): RawEventModel {
 	}).catch((err: unknown) => {
 		// Code 48 = collection already exists — safe to ignore.
 		if ((err as { code?: number }).code !== 48) {
-			console.error("[metrics] Failed to create api_raw_events collection:", err);
+			console.error(
+				"[metrics] Failed to create api_raw_events collection:",
+				err,
+			);
 		}
 	});
+	
+	console.log(
+		"[RAWEVENTSCHEMA]: Created time-series collection api_raw_events with TTL ",
+	);
 
 	return db.model<RawEventDocument, RawEventModel>("RawEvent", rawEventSchema);
 }
