@@ -6,7 +6,10 @@ import { standardResponse } from "../utils/apiResponse.utils.js";
 import { UserStaticMethods } from "../types/mongoModels/user.type.js";
 import { ApiKeyStaticMethods } from "../types/mongoModels/apikeys.type.js";
 import { ClientUserStaticMethods } from "../modules/clientauth/types/userMongo.type.js";
-import { IRollupBucket, RollupGranularity } from "../modules/metrics/types/rollupData.type.js";
+import {
+	IRollupBucket,
+	RollupGranularity,
+} from "../modules/metrics/types/rollupData.type.js";
 
 type RollupModels = {
 	Rollup5m: Model<IRollupBucket>;
@@ -30,7 +33,11 @@ function selectRollupTier(
 }
 
 // ── Shared auth helper ────────────────────────────────────────────────────────
-async function resolveUser(req: Request, res: Response, userModel: UserStaticMethods) {
+async function resolveUser(
+	req: Request,
+	res: Response,
+	userModel: UserStaticMethods,
+) {
 	if (!req.cookies.acToken || req.cookies.acToken === "") {
 		res.status(401).json(standardResponse(false, "Missing access token."));
 		return null;
@@ -38,9 +45,14 @@ async function resolveUser(req: Request, res: Response, userModel: UserStaticMet
 
 	let decoded: JwtPayload;
 	try {
-		decoded = jwt.verify(req.cookies.acToken, config.ACCESS_TOKEN_JWT_SECRET) as JwtPayload;
+		decoded = jwt.verify(
+			req.cookies.acToken,
+			config.ACCESS_TOKEN_JWT_SECRET,
+		) as JwtPayload;
 	} catch {
-		res.status(401).json(standardResponse(false, "Invalid or expired access token."));
+		res
+			.status(401)
+			.json(standardResponse(false, "Invalid or expired access token."));
 		return null;
 	}
 
@@ -54,11 +66,18 @@ async function resolveUser(req: Request, res: Response, userModel: UserStaticMet
 }
 
 // ── Shared time-range parser ──────────────────────────────────────────────────
-function parseTimeRange(req: Request, res: Response): { from: Date; to: Date } | null {
+function parseTimeRange(
+	req: Request,
+	res: Response,
+): { from: Date; to: Date } | null {
 	const { from: fromStr, to: toStr } = req.query as Record<string, string>;
 
 	if (!fromStr || !toStr) {
-		res.status(400).json(standardResponse(false, "Query params 'from' and 'to' are required."));
+		res
+			.status(400)
+			.json(
+				standardResponse(false, "Query params 'from' and 'to' are required."),
+			);
 		return null;
 	}
 
@@ -66,12 +85,21 @@ function parseTimeRange(req: Request, res: Response): { from: Date; to: Date } |
 	const to = new Date(toStr);
 
 	if (isNaN(from.getTime()) || isNaN(to.getTime())) {
-		res.status(400).json(standardResponse(false, "'from' and 'to' must be valid ISO date strings."));
+		res
+			.status(400)
+			.json(
+				standardResponse(
+					false,
+					"'from' and 'to' must be valid ISO date strings.",
+				),
+			);
 		return null;
 	}
 
 	if (from >= to) {
-		res.status(400).json(standardResponse(false, "'from' must be before 'to'."));
+		res
+			.status(400)
+			.json(standardResponse(false, "'from' must be before 'to'."));
 		return null;
 	}
 
@@ -95,25 +123,39 @@ export async function getAllApiMetricsController(
 	next: NextFunction,
 	{ userModel, apiKeyModel, Rollup5m, Rollup1h, Rollup1d }: ControllerDeps,
 ) {
+	console.log("getAllApiMetricsController called");
 	try {
 		const user = await resolveUser(req, res, userModel);
 		if (!user) return;
+		console.log("User resolved:", user);
 
 		const range = parseTimeRange(req, res);
 		if (!range) return;
 
 		const { from, to } = range;
 
-		const apiKeys = await apiKeyModel.find({ ownerId: user._id }).select("_id").lean();
+		const apiKeys = await apiKeyModel
+			.find({ userId: String(user._id) })
+			.select("_id")
+			.lean();
 		if (!apiKeys.length) {
-			return res.status(404).json(standardResponse(false, "No API keys found for this user."));
+			return res
+				.status(404)
+				.json(standardResponse(false, "No API keys found for this user."));
 		}
-
+		console.log("API keys found:", apiKeys.length);
 		const apiKeyIds = apiKeys.map((k) => k._id);
-		const { tier, model } = selectRollupTier(from, to, { Rollup5m, Rollup1h, Rollup1d });
-
+		const { tier, model } = selectRollupTier(from, to, {
+			Rollup5m,
+			Rollup1h,
+			Rollup1d,
+		});
+		console.log("Selected rollup tier:", tier);
 		const buckets = await model
-			.find({ apiKeyId: { $in: apiKeyIds }, bucketStart: { $gte: from, $lt: to } })
+			.find({
+				apiKeyId: { $in: apiKeyIds },
+				bucketStart: { $gte: from, $lt: to },
+			})
 			.sort({ bucketStart: 1 })
 			.lean();
 
@@ -133,7 +175,7 @@ export async function getAllApiMetricsController(
 				acc.maxDuration = Math.max(acc.maxDuration, b.maxDuration);
 			}
 		}
-
+		console.log("Merged buckets count:", merged.size);
 		return res.status(200).json(
 			standardResponse(true, "Metrics fetched successfully.", {
 				tier,
@@ -155,14 +197,17 @@ export async function getSpecificApiMetricsController(
 	try {
 		const apiId = req.params.apikeyid;
 		if (!apiId) {
-			return res.status(400).json(standardResponse(false, "API key ID is required in the URL."));
+			return res
+				.status(400)
+				.json(standardResponse(false, "API key ID is required in the URL."));
 		}
 
 		const user = await resolveUser(req, res, userModel);
 		if (!user) return;
 
 		// Ownership check — 403 to avoid leaking existence of keys not owned by caller
-		const apiKey = await apiKeyModel.findOne({ _id: apiId, ownerId: user._id });
+		// Ensure IDs are strings to satisfy mongoose typings
+		const apiKey = await apiKeyModel.findOne({ _id: String(apiId), userId: String(user._id) });
 		if (!apiKey) {
 			return res.status(403).json(standardResponse(false, "Forbidden."));
 		}
@@ -175,21 +220,35 @@ export async function getSpecificApiMetricsController(
 		const to = range.to;
 
 		if (from >= to) {
-			return res.status(400).json(
-				standardResponse(false, "Requested range is entirely before this API key was created."),
-			);
+			return res
+				.status(400)
+				.json(
+					standardResponse(
+						false,
+						"Requested range is entirely before this API key was created.",
+					),
+				);
 		}
 
-		const { tier, model } = selectRollupTier(from, to, { Rollup5m, Rollup1h, Rollup1d });
+		const { tier, model } = selectRollupTier(from, to, {
+			Rollup5m,
+			Rollup1h,
+			Rollup1d,
+		});
 
 		const buckets = await model
 			.find({ apiKeyId: apiId, bucketStart: { $gte: from, $lt: to } })
 			.sort({ bucketStart: 1 })
 			.lean();
 
-		return res.status(200).json(
-			standardResponse(true, "Metrics fetched successfully.", { tier, buckets }),
-		);
+		return res
+			.status(200)
+			.json(
+				standardResponse(true, "Metrics fetched successfully.", {
+					tier,
+					buckets,
+				}),
+			);
 	} catch (err) {
 		next(err);
 	}
