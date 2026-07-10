@@ -36,32 +36,14 @@ export function createDashboardRouter({
 	// All client routes are protected by API key + general rate limiter
 	router.use(apikeyHandler, clientApiRateLimiter);
 
+	const deps = { userModel, apiKeyModel, clientUserModel, Rollup5m, Rollup1h, Rollup1d };
+
 	router.get("/client/all-apis", (req, res, next) =>
-		dashboardControllers.getAllApiMetricsController(
-			req,
-			res,
-			next,
-			userModel,
-			apiKeyModel,
-			clientUserModel,
-			Rollup5m,
-			Rollup1h,
-			Rollup1d,
-		),
+		dashboardControllers.getAllApiMetricsController(req, res, next, deps),
 	);
 
 	router.get("/client/all-apis/:apikeyid", (req, res, next) =>
-		dashboardControllers.getSpecificApiMetricsController(
-			req,
-			res,
-			next,
-			userModel,
-			apiKeyModel,
-			clientUserModel,
-			Rollup5m,
-			Rollup1h,
-			Rollup1d,
-		),
+		dashboardControllers.getSpecificApiMetricsController(req, res, next, deps),
 	);
 
 	return router;
