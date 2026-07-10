@@ -22,6 +22,8 @@ import { initWatermarkModel } from "./modules/metrics/models/watermark.schema.js
 import { createRollupModels } from "./modules/metrics/models/rollupData.schema.js";
 import { initRollupWorkers } from "./libs/bullmq/workers/metricsWorker.js";
 import { createRollupProcessor } from "./libs/bullmq/controllers/metricsworkers.controller.js";
+import { runTestMetrics } from "../scripts/testMetrics.js";
+import { createDashboardRouter } from "./routes/dashboard.routes.js";
 
 // =================== Server Initialization ===================
 
@@ -51,7 +53,13 @@ const { Rollup5m, Rollup1h, Rollup1d } = createRollupModels(TaskapiClientsDb);
 //alias kept for readability during transition
 const clientUsersStoreModel = clientUserModel;
 
-
+// await runTestMetrics(
+// 	rawEventsClientModel,
+// 	watermarkModel,
+// 	Rollup5m,
+// 	Rollup1h,
+// 	Rollup1d,
+// );
 // Metrics Workers Initialization
 initRollupWorkers(
 	{
@@ -88,6 +96,14 @@ const clientUserRouter: express.Router = createClientUserRouter({
 	apiKeyModel,
 });
 
+const dashboardRouter: express.Router = createDashboardRouter({
+	userModel,
+	apiKeyModel,
+	clientUserModel,
+	Rollup5m,
+	Rollup1h,
+	Rollup1d,
+});
 // =================== Cors Configuration ===================
 
 const corsOptions = {
@@ -111,6 +127,7 @@ app.use(`${BASE_URL}/auth`, apiRateLimiter, authRouter);
 app.use(`${BASE_URL}/subscription`, apiRateLimiter, subscriptionRouter);
 app.use(`${BASE_URL}/api-keys`, apiRateLimiter, apiKeyRouter);
 app.use(`${BASE_URL}/client/auth`, apiRateLimiter, clientUserRouter);
+app.use(`${BASE_URL}/dashboard`, apiRateLimiter, dashboardRouter);
 
 app.use(`${BASE_URL}/`, apiRateLimiter, generalRouter);
 
