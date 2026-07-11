@@ -238,12 +238,39 @@ apiKeySchema.methods.verifyKey = function (plainKey: string): boolean {
 	return hash;
 };
 
-apiKeySchema.methods.hasScope = function (requiredScope: string): boolean {
-	return this.scopes.includes(requiredScope) || this.scopes.includes("admin");
+apiKeySchema.methods.hasScope = function (httpMethod: string): boolean {
+	// map HTTP methods to scopes
+	const mappedScopes: Record<string, string[]> = {
+		READ: ["GET", "HEAD", "OPTIONS"],
+		WRITE: ["POST", "PUT", "PATCH"],
+		DELETE: ["DELETE"],
+		ADMIN: ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],
+	};
+
+	// normalize input
+	const method = httpMethod.toUpperCase();
+
+	// check each scope in this.scopes
+	for (const scope of this.scopes) {
+		const allowedMethods = mappedScopes[scope.toUpperCase()];
+		if (allowedMethods && allowedMethods.includes(method)) {
+			return true;
+		}
+	}
+
+	return false;
 };
 
 apiKeySchema.methods.isIPAllowed = function (ip: string): boolean {
 	if (this.allowedIPs.length === 0) return true;
+	if (
+		this.allowedIPs.length === 1 &&
+		(this.allowedIPs[0] === "0.0.0.0" ||
+			this.allowedIPs[0] === "00.00.00.00" ||
+			this.allowedIPs[0] === "000.000.000.000")
+	) {
+		return true;
+	}
 	return this.allowedIPs.includes(ip);
 };
 
