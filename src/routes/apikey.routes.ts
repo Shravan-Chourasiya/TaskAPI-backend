@@ -44,16 +44,6 @@ export function createApiKeyRouter({
 		),
 	);
 
-	router.post("/revoke/:keyId", generalApiKeyLimiter, (req, res, next) =>
-		apiKeyController.revokeApiKeyController(
-			req,
-			res,
-			next,
-			userModel,
-			apiKeyModel,
-		),
-	);
-
 	router.patch(
 		"/update",
 		apiKeyUpdateLimiter,

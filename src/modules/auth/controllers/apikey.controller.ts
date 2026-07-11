@@ -170,52 +170,6 @@ export const listApiKeysController = async (
 	}
 };
 
-export const revokeApiKeyController = async (
-	req: Request,
-	res: Response,
-	next: NextFunction,
-	userModel: Model<UserDocument, UserStaticMethods>,
-	apiKeyModel: Model<ApiKeyDocument, ApiKeyStaticMethods>,
-) => {
-	try {
-		const { keyId } = req.params;
-		const { reason } = req.body;
-
-		if (reason && typeof reason !== "string") {
-			return res
-				.status(400)
-				.json(standardResponse(false, "Reason must be a string"));
-		}
-
-		if (!req.cookies.acToken) {
-			return res.status(401).json(standardResponse(false, "Unauthorized"));
-		}
-
-		const decoded = jwt.verify(
-			req.cookies.acToken,
-			config.ACCESS_TOKEN_JWT_SECRET,
-		) as JwtPayload;
-
-		const userId = decoded.id;
-		const apiKey: ApiKeyDocument | null = await apiKeyModel.findOne({
-			_id: keyId as string,
-			userId: userId as string,
-		});
-
-		if (!apiKey) {
-			return res.status(404).json(standardResponse(false, "API key not found"));
-		}
-
-		await apiKey.revoke(reason);
-
-		return res
-			.status(200)
-			.json(standardResponse(true, "API key revoked successfully"));
-	} catch (error) {
-		next(error);
-	}
-};
-
 export const deleteApiKeyController = async (
 	req: Request,
 	res: Response,
@@ -241,12 +195,13 @@ export const deleteApiKeyController = async (
 		const userId = decoded.id;
 
 		const apiKey = await apiKeyModel
-			.findOneAndDelete({ _id: keyId, userId })
+			.findOneAndDelete({ _id: keyId.toString(), userId })
 			.lean();
 
 		if (!apiKey) {
 			return res.status(404).json(standardResponse(false, "API key not found"));
 		}
+		await userModel.findByIdAndUpdate(userId, { $inc: { apiKeyCount: -1 } });
 		return res
 			.status(200)
 			.json(standardResponse(true, "API key deleted successfully", apiKey));
