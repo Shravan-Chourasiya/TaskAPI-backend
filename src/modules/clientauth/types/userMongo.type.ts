@@ -14,7 +14,7 @@ export type ClientUser = {
 	lastPasswordChangedAt?: Date;
 	authProvider: "email" | "google" | "github" | "facebook" | "apple";
 	authProviderId?: string;
-	emailVerified: boolean;
+	emailVerified: boolean;		
 	verifiedAt?: Date;
 	// Profile
 	profile: {
