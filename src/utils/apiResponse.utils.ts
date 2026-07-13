@@ -6,7 +6,7 @@ interface ApiResponse {
 export const standardResponse = (
 	success: boolean,
 	message: string,
-	data: object | null = null,
+	data: object | null | object[] = null,
 ): ApiResponse => {
 	return {
 		success,
@@ -14,7 +14,6 @@ export const standardResponse = (
 		data,
 	};
 };
-
 
 export const isUserResponse = (
 	success: boolean,
@@ -32,18 +31,18 @@ export const isUserResponse = (
 	};
 };
 
-	export const tokenMiddlewareResponse = (
-		success: boolean,
-		message: string,
-		error?: string,
-		requiresReAuth: boolean = true,
-	): ApiResponse => {
-		return {
-			success,
-			message,
-			data: {
-				error,
-				requiresReAuth,
-			},
-		};	
+export const tokenMiddlewareResponse = (
+	success: boolean,
+	message: string,
+	error?: string,
+	requiresReAuth: boolean = true,
+): ApiResponse => {
+	return {
+		success,
+		message,
+		data: {
+			error,
+			requiresReAuth,
+		},
 	};
+};
