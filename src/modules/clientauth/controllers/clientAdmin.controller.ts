@@ -117,7 +117,6 @@ export async function addUser(
 ) {
 	try {
 		const { newUserData }: z.infer<typeof adminAddNewUserSchema> = req.body;
-
 		const clientId = resolveClientId(req, res);
 		if (!clientId) return;
 

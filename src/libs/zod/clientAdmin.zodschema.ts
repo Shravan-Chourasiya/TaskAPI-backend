@@ -6,8 +6,6 @@ import {
 } from "./auth.zodschema.js";
 
 export const adminModifyUserSchema = z.object({
-	clientId: z.string(),
-	apiKeyId: z.string(),
 	userNewData: z.object({
 		email: z.string().email(),
 		username: z.string().optional(),
@@ -55,8 +53,6 @@ export type AdminEditableClientUserDataType = z.infer<
 >;
 
 export const adminAddNewUserSchema = z.object({
-	clientId: z.string(),
-	apiKeyId: z.string(),
 	newUserData: z.object({
 		email: emailSchema,
 		username: usernameSchema,
