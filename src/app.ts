@@ -24,6 +24,7 @@ import { initRollupWorkers } from "./libs/bullmq/workers/metricsWorker.js";
 import { createRollupProcessor } from "./libs/bullmq/controllers/metricsworkers.controller.js";
 import { runTestMetrics } from "../scripts/testMetrics.js";
 import { createDashboardRouter } from "./routes/dashboard.routes.js";
+import { createClientAdminRouter } from "./routes/clientAdmin.routes.js";
 
 // =================== Server Initialization ===================
 
@@ -96,6 +97,11 @@ const clientUserRouter: express.Router = createClientUserRouter({
 	apiKeyModel,
 });
 
+const clientAdminRouter: express.Router = createClientAdminRouter({
+	clientUserModel,
+	apiKeyModel,
+});
+
 const dashboardRouter: express.Router = createDashboardRouter({
 	userModel,
 	apiKeyModel,
@@ -127,6 +133,7 @@ app.use(`${BASE_URL}/auth`, apiRateLimiter, authRouter);
 app.use(`${BASE_URL}/subscription`, apiRateLimiter, subscriptionRouter);
 app.use(`${BASE_URL}/api-keys`, apiRateLimiter, apiKeyRouter);
 app.use(`${BASE_URL}/client/auth`, apiRateLimiter, clientUserRouter);
+app.use(`${BASE_URL}/client/admin`, apiRateLimiter, clientAdminRouter);
 app.use(`${BASE_URL}/dashboard`, apiRateLimiter, dashboardRouter);
 
 app.use(`${BASE_URL}/`, apiRateLimiter, generalRouter);
