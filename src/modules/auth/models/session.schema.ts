@@ -7,6 +7,11 @@ import { AUTH_CONSTANTS } from "../../../constants.js";
 
 export const sessionSchema = new mongoose.Schema(
 	{
+		csrfToken: {
+			type: String,
+			select: false,
+		},
+
 		userId: {
 			type: mongoose.Schema.Types.ObjectId,
 			ref: "Users",

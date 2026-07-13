@@ -1,6 +1,7 @@
 import type { Model, Document, Types } from "mongoose";
 
 export type SessionType = {
+	csrfToken?: string;
 	userId: string;
 	deviceId: string;
 	userAgent: string;
