@@ -1,38 +1,30 @@
 import type { Request, NextFunction, Response } from "express";
-import {
-	ClientUser,
-	ClientUserDocument,
-	ClientUserStaticMethods,
-} from "../types/userMongo.type.js";
+import type { ClientUserStaticMethods } from "../types/userMongo.type.js";
 import { standardResponse } from "../../../utils/apiResponse.utils.js";
-import z, { string } from "zod";
+import z from "zod";
 import {
 	adminAddNewUserSchema,
 	AdminEditableClientUserDataType,
 	adminModifyUserSchema,
 } from "../../../libs/zod/clientAdmin.zodschema.js";
+import { resolveClientId } from "../utils/clientAdminController.utils.js";
 
-type RequestWithClientId = Request & { clientId?: string; apiKeyId?: string };
-type RequestWithClientIdandUserData = RequestWithClientId & {
+type RequestWithApiOwner = Request & { apiOwnerId?: string };
+type RequestWithApiOwnerAndUserData = RequestWithApiOwner & {
 	userNewData?: AdminEditableClientUserDataType;
 };
 
 export async function getAllUsersList(
-	req: RequestWithClientId,
+	req: RequestWithApiOwner,
 	res: Response,
 	next: NextFunction,
 	clientUserModel: ClientUserStaticMethods,
 ) {
 	try {
-		if (!req.clientId) {
-			return res
-				.status(403)
-				.json(
-					standardResponse(false, "Client ID is missing in the request", null),
-				);
-		}
+		const clientId = resolveClientId(req, res);
+		if (!clientId) return;
 
-		const users = await clientUserModel.find({ clientId: req.clientId }).lean();
+		const users = await clientUserModel.find({ clientId }).lean();
 		if (!users || users.length === 0) {
 			return res
 				.status(404)
@@ -48,92 +40,58 @@ export async function getAllUsersList(
 }
 
 export async function getFilteredUsersList(
-	req: RequestWithClientId,
+	req: RequestWithApiOwner,
 	res: Response,
 	next: NextFunction,
 	clientUserModel: ClientUserStaticMethods,
 ) {
 	try {
 		const { f } = req.params;
-		if (!f || f === "" || f[0]?.trim() === "") {
+		if (!f || f === "") {
 			return res
 				.status(400)
 				.json(standardResponse(false, "Fill missing fields", null));
 		}
 
-		if (!req.apiKeyId) {
+		const clientId = resolveClientId(req, res);
+		if (!clientId) return;
+
+		const users = await clientUserModel.find({ clientId, status: f }).lean();
+		if (!users || users.length === 0) {
 			return res
-				.status(400)
-				.json(standardResponse(false, "Missing fields in Request", null));
-		}
-		if (!req.clientId) {
-			return res
-				.status(403)
-				.json(
-					standardResponse(
-						false,
-						"You are not authorized to perform this action",
-						null,
-					),
-				);
+				.status(404)
+				.json(standardResponse(false, "No users found", null));
 		}
 
-		if (f && req.apiKeyId && req.clientId) {
-			const users = await clientUserModel
-				.find({
-					clientId: req.clientId,
-					apiKeyId: req.apiKeyId,
-					status: f,
-				})
-				.lean();
-			if (!users || users.length === 0) {
-				return res
-					.status(404)
-					.json(standardResponse(false, "No users found", null));
-			}
-			return res
-				.status(200)
-				.json(standardResponse(true, "Users fetched successfully", users));
-		} else if (f && req.clientId) {
-			const users = await clientUserModel
-				.find({
-					clientId: req.clientId,
-					status: f,
-				})
-				.lean();
-			if (!users || users.length === 0) {
-				return res
-					.status(404)
-					.json(standardResponse(false, "No users found", null));
-			}
-			return res
-				.status(200)
-				.json(standardResponse(true, "Users fetched successfully", users));
-		}
+		return res
+			.status(200)
+			.json(standardResponse(true, "Users fetched successfully", users));
 	} catch (err: any) {
 		next(err);
 	}
 }
 
 export async function modifyUser(
-	req: RequestWithClientIdandUserData,
+	req: RequestWithApiOwnerAndUserData,
 	res: Response,
 	next: NextFunction,
 	clientUserModel: ClientUserStaticMethods,
 ) {
 	try {
-		const userToModifyId = req.params;
-		const { clientId, userNewData }: z.infer<typeof adminModifyUserSchema> =
-			req.body;
+		const { userId } = req.params;
+		const { userNewData }: z.infer<typeof adminModifyUserSchema> = req.body;
 
-		if (!clientId || !userToModifyId || !userNewData) {
+		const clientId = resolveClientId(req, res);
+		if (!clientId) return;
+
+		if (!userId || !userNewData) {
 			return res
 				.status(400)
 				.json(standardResponse(false, "Missing required fields", null));
 		}
 
 		const targetUser = await clientUserModel.findOneAndUpdate(
-			{ clientId, _id: userToModifyId },
+			{ clientId, _id: userId },
 			{ $set: userNewData },
 			{ new: true },
 		);
@@ -142,6 +100,7 @@ export async function modifyUser(
 				.status(404)
 				.json(standardResponse(false, "User not found", null));
 		}
+
 		return res
 			.status(200)
 			.json(standardResponse(true, "User updated successfully", targetUser));
@@ -151,18 +110,18 @@ export async function modifyUser(
 }
 
 export async function addUser(
-	req: RequestWithClientId,
+	req: RequestWithApiOwner,
 	res: Response,
 	next: NextFunction,
 	clientUserModel: ClientUserStaticMethods,
 ) {
 	try {
-		const {
-			clientId,
-			apiKeyId,
-			newUserData,
-		}: z.infer<typeof adminAddNewUserSchema> = req.body;
-		if (!clientId || !apiKeyId || !newUserData) {
+		const { newUserData }: z.infer<typeof adminAddNewUserSchema> = req.body;
+
+		const clientId = resolveClientId(req, res);
+		if (!clientId) return;
+
+		if (!newUserData) {
 			return res
 				.status(400)
 				.json(standardResponse(false, "Missing required fields", null));
@@ -175,11 +134,6 @@ export async function addUser(
 			...(verifiedAt !== undefined && { verifiedAt }),
 		});
 
-		if (!newUserCreated) {
-			return res
-				.status(500)
-				.json(standardResponse(false, "Failed to create user", null));
-		}
 		return res
 			.status(201)
 			.json(standardResponse(true, "User added successfully", newUserCreated));
@@ -189,29 +143,31 @@ export async function addUser(
 }
 
 export async function deleteUser(
-	req: RequestWithClientId,
+	req: RequestWithApiOwner,
 	res: Response,
 	next: NextFunction,
 	clientUserModel: ClientUserStaticMethods,
 ) {
 	try {
-		const toBeDeletedUserId = req.params;
-		if (!toBeDeletedUserId || !req.clientId) {
+		const { userId } = req.params;
+
+		const clientId = resolveClientId(req, res);
+		if (!clientId) return;
+
+		if (!userId) {
 			return res
 				.status(400)
 				.json(standardResponse(false, "Missing Required Data", null));
 		}
+
 		const userToDelete = await clientUserModel.findOneAndUpdate(
-			{
-				clientId: req.clientId,
-				_id: toBeDeletedUserId,
-			},
+			{ clientId, _id: userId },
 			{
 				isDeleted: true,
 				status: "deleted",
 				lastActiveAt: new Date(),
 				deletedAt: new Date(),
-				scheduledDeletionAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // Schedule deletion after 30 days
+				scheduledDeletionAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
 			},
 			{ new: true },
 		);
@@ -220,15 +176,11 @@ export async function deleteUser(
 				.status(404)
 				.json(standardResponse(false, "User not found", null));
 		}
+
 		const deletedUser = await clientUserModel.deleteOne({
-			clientId: req.clientId,
-			_id: toBeDeletedUserId,
+			clientId,
+			_id: userId,
 		});
-		if (!deletedUser) {
-			return res
-				.status(500)
-				.json(standardResponse(false, "Failed to delete User", null));
-		}
 		return res
 			.status(200)
 			.json(standardResponse(true, "User Deleted Successfully!", deletedUser));
@@ -238,24 +190,26 @@ export async function deleteUser(
 }
 
 export async function blackListOrBlockUser(
-	req: RequestWithClientId,
+	req: RequestWithApiOwner,
 	res: Response,
 	next: NextFunction,
 	clientUserModel: ClientUserStaticMethods,
 ) {
 	try {
-		const toBeDeletedUserId = req.params;
+		const { id } = req.params;
 		const { blackListReason }: { blackListReason?: string } = req.body;
-		if (!toBeDeletedUserId || !req.clientId) {
+
+		const clientId = resolveClientId(req, res);
+		if (!clientId) return;
+
+		if (!id) {
 			return res
 				.status(400)
 				.json(standardResponse(false, "Missing Required Data", null));
 		}
+
 		const blackListedUser = await clientUserModel.findOneAndUpdate(
-			{
-				clientId: req.clientId,
-				_id: toBeDeletedUserId,
-			},
+			{ clientId, _id: id },
 			{
 				isDeleted: true,
 				status: "blacklisted",
@@ -270,6 +224,7 @@ export async function blackListOrBlockUser(
 				.status(404)
 				.json(standardResponse(false, "User not found", null));
 		}
+
 		return res
 			.status(200)
 			.json(
@@ -277,6 +232,57 @@ export async function blackListOrBlockUser(
 					true,
 					"User Blacklisted Successfully!",
 					blackListedUser,
+				),
+			);
+	} catch (err: any) {
+		next(err);
+	}
+}
+
+export async function unBlackListUser(
+	req: RequestWithApiOwner,
+	res: Response,
+	next: NextFunction,
+	clientUserModel: ClientUserStaticMethods,
+) {
+	try {
+		const { id } = req.params;
+
+		const clientId = resolveClientId(req, res);
+		if (!clientId) return;
+
+		if (!id) {
+			return res
+				.status(400)
+				.json(standardResponse(false, "Missing Required Data", null));
+		}
+
+		const unBlacklistedUser = await clientUserModel.findOneAndUpdate(
+			{ clientId, _id: id, status: "blacklisted" },
+			{
+				isDeleted: false,
+				status: "active",
+				blackListReason: null,
+				blackListedAt: null,
+				lastActiveAt: new Date(),
+			},
+			{ new: true },
+		);
+		if (!unBlacklistedUser) {
+			return res
+				.status(404)
+				.json(
+					standardResponse(false, "User not found or not blacklisted", null),
+				);
+		}
+
+		return res
+			.status(200)
+			.json(
+				standardResponse(
+					true,
+					"User Unblacklisted Successfully!",
+					unBlacklistedUser,
 				),
 			);
 	} catch (err: any) {
