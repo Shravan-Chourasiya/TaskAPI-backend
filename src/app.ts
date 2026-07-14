@@ -17,6 +17,7 @@ import { initSubscriptionModel } from "./modules/auth/models/subscription.schema
 import { initClientUserModel } from "./modules/clientauth/schemas/userMongo.schema.js";
 import { initRawEventModel } from "./modules/metrics/models/rawEvent.schema.js";
 import { createMetricsMiddleware } from "./middlewares/metricsCollector.middleware.js";
+import { createCsrfMiddleware } from "./middlewares/csrf.middleware.js";
 import { BASE_URL } from "./constants.js";
 import { initWatermarkModel } from "./modules/metrics/models/watermark.schema.js";
 import { createRollupModels } from "./modules/metrics/models/rollupData.schema.js";
@@ -25,6 +26,7 @@ import { createRollupProcessor } from "./libs/bullmq/controllers/metricsworkers.
 import { runTestMetrics } from "../scripts/testMetrics.js";
 import { createDashboardRouter } from "./routes/dashboard.routes.js";
 import { createClientAdminRouter } from "./routes/clientAdmin.routes.js";
+import { createSiteAdminRouter } from "./routes/siteAdmin.routes.js";
 
 // =================== Server Initialization ===================
 
@@ -102,6 +104,13 @@ const clientAdminRouter: express.Router = createClientAdminRouter({
 	apiKeyModel,
 });
 
+const siteAdminRouter: express.Router = createSiteAdminRouter({
+	userModel,
+	apiKeyModel,
+	subscriptionModel,
+	sessionModel,
+});
+
 const dashboardRouter: express.Router = createDashboardRouter({
 	userModel,
 	apiKeyModel,
@@ -126,6 +135,7 @@ app.use(cookieParser());
 app.use(morgan(config.NODE_ENV === "production" ? "combined" : "development"));
 app.use(cors(corsOptions));
 app.use(createMetricsMiddleware(rawEventsClientModel));
+app.use(createCsrfMiddleware(sessionModel));
 
 // =================== Routes Integration ===================
 
@@ -134,6 +144,7 @@ app.use(`${BASE_URL}/subscription`, apiRateLimiter, subscriptionRouter);
 app.use(`${BASE_URL}/api-keys`, apiRateLimiter, apiKeyRouter);
 app.use(`${BASE_URL}/client/auth`, apiRateLimiter, clientUserRouter);
 app.use(`${BASE_URL}/client/admin`, apiRateLimiter, clientAdminRouter);
+app.use(`${BASE_URL}/site-admin`, apiRateLimiter, siteAdminRouter);
 app.use(`${BASE_URL}/dashboard`, apiRateLimiter, dashboardRouter);
 
 app.use(`${BASE_URL}/`, apiRateLimiter, generalRouter);
