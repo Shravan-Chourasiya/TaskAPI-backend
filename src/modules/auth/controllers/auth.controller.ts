@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { config } from "../../../configs/app.config.js";
 import type { NextFunction, Request, Response } from "express";
 import { emailPurposeMapper, sendAndStoreOTP, AUTH_OTP_PURPOSES, OTP_PREFIX } from "../utils/authcontroller.utils.js";
+import { generateCsrfToken } from "../../../middlewares/csrf.middleware.js";
 import * as z from "zod";
 import crypto from "crypto";
 import type {
@@ -156,6 +157,7 @@ export async function loginController(
 
 		if (existingSession) {
 			const tokenFamily = crypto.randomBytes(16).toString("hex");
+			const csrfToken = generateCsrfToken();
 
 			const refreshToken = jwt.sign(
 				{
@@ -180,6 +182,7 @@ export async function loginController(
 			await existingSession.updateOne({
 				refreshTokenHash: rfTokenHash,
 				tokenFamily,
+				csrfToken,
 				isRevoked: false,
 				status: "active",
 				lastActivityAt: new Date(),
@@ -193,6 +196,7 @@ export async function loginController(
 				sameSite: "lax",
 				maxAge: 600000,
 			});
+			res.setHeader("X-CSRF-Token", csrfToken);
 			return res.status(200).json({
 				success: true,
 				message: "User Logged in successfully!",
@@ -241,6 +245,7 @@ export async function loginController(
 			}
 			isUser.sessionDevices.push(deviceId);
 			await isUser.save();
+			const csrfToken = generateCsrfToken();
 			const newSession = await sessionModel.create([
 				{
 					userId: isUser._id.toString(),
@@ -252,6 +257,7 @@ export async function loginController(
 					ipCity: req.headers["cf-ipcity"]?.toString() || "unknown",
 					tokenFamily,
 					refreshTokenHash: rfTokenHash,
+					csrfToken,
 					isRevoked: false,
 					sessionDevices: [deviceId],
 					status: "active",
@@ -293,6 +299,7 @@ export async function loginController(
 				sameSite: "lax",
 				maxAge: 604800000 * 4,
 			});
+			res.setHeader("X-CSRF-Token", csrfToken);
 			return res.status(200).json({
 				message: "User Logged in successfully!",
 				data: {
