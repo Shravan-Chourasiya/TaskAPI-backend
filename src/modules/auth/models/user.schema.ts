@@ -6,7 +6,7 @@ import type {
 } from "../../../types/mongoModels/user.type.js";
 import * as crypto from "crypto";
 import * as bcrypt from "bcryptjs";
-import { AUTH_CONSTANTS, USER_LIMITS } from "../../../constants.js";
+import { AUTH_CONSTANTS, USER_LIMITS, ROLE_RANK, type UserRole } from "../../../constants.js";
 
 export const userSchema = new mongoose.Schema(
 	{
@@ -172,10 +172,11 @@ export const userSchema = new mongoose.Schema(
 			default: false,
 		},
 
-		roles: {
-			type: [String],
-			enum: ["user", "admin", "moderator", "developer"],
-			default: ["user"],
+		role: {
+			type: String,
+			enum: Object.keys(ROLE_RANK),
+			default: "user" satisfies UserRole,
+			index: true,
 		},
 
 		subscriptionType: {
@@ -487,7 +488,7 @@ userSchema.statics.findByUsername = function (username: string) {
 
 // Find users by role
 userSchema.statics.findByRole = function (role: string) {
-	return this.find({ roles: role, isDeleted: false });
+	return this.find({ role, isDeleted: false });
 };
 
 // Get user statistics

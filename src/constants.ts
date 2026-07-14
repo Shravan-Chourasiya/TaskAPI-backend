@@ -81,6 +81,16 @@ export const COOKIE_CONSTANTS = {
 	REFRESH_TOKEN_MAX_AGE: 7 * 24 * 60 * 60 * 1000,
 } as const;
 
+// ============ USER ROLES ============
+export const ROLE_RANK = {
+	user: 0,
+	developer: 1,
+	moderator: 2,
+	admin: 3,
+} as const;
+
+export type UserRole = keyof typeof ROLE_RANK;
+
 // ============ USER SCHEMA LIMITS ============
 export const USER_LIMITS = {
 	USERNAME_MIN_LENGTH: 3,

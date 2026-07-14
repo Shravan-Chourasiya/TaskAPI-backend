@@ -1,4 +1,5 @@
 import type { Model, Document } from "mongoose";
+import type { UserRole } from "../../constants.js";
 
 export type UserType = {
 	username: string;
@@ -40,7 +41,7 @@ export type UserType = {
 	};
 	phone?: string;
 	isPhoneVerified: boolean;
-	roles: "user" | "admin" | "moderator" | "developer";
+	role: UserRole;
 	isDeleted: boolean;
 	deletedAt: Date;
 	scheduledDeletionAt: Date;
