@@ -19,7 +19,7 @@ export function createGeneralRouter({
 	);
 	const router = express.Router();
 
-	router.get("/is-user", apiRateLimiter, accessTokenHandler, (req, res, next) =>
+	router.get("/auth/me", apiRateLimiter, accessTokenHandler, (req, res, next) =>
 		generalRouter.isUserController(req, res, next, userModel),
 	);
 
@@ -27,11 +27,11 @@ export function createGeneralRouter({
 		generalRouter.healthCheckController(req, res, next),
 	);
 
-	router.post("/contact-us", apiRateLimiter, (req, res, next) =>
+	router.post("/contact", apiRateLimiter, (req, res, next) =>
 		generalRouter.contactUsEmailController(req, res, next),
 	);
 
-	router.get("/check-username", apiRateLimiter, (req, res, next) =>
+	router.get("/auth/username/available", apiRateLimiter, (req, res, next) =>
 		generalRouter.checkUsernameController(req, res, next, userModel),
 	);
 
