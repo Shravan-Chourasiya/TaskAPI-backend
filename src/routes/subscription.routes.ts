@@ -22,7 +22,7 @@ export function createSubscriptionRouter({
 	);
 	const router = express.Router();
 
-	router.post("/create-order", accessTokenHandler, ZodValidatorMiddleware(buySubscriptionSchema), (req, res, next) =>
+	router.post("/order", accessTokenHandler, ZodValidatorMiddleware(buySubscriptionSchema), (req, res, next) =>
 		subscriptionControllers.buySubscriptionController(
 			req,
 			res,
@@ -31,7 +31,7 @@ export function createSubscriptionRouter({
 			subscriptionModel,
 		),
 	);
-	router.post("/verify-payment", accessTokenHandler, (req, res, next) =>
+	router.post("/order/verify", accessTokenHandler, (req, res, next) =>
 		subscriptionControllers.verifySubscriptionPayment(
 			req,
 			res,
