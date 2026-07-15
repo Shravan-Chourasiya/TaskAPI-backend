@@ -57,20 +57,6 @@ export function createAuthRouter({
 	);
 
 	router.post(
-		"/verify",
-		otpVerificationLimiter,
-		ZodValidatorMiddleware(otpSchema),
-		(req, res, next) =>
-			authControllers.verificationController(
-				req,
-				res,
-				next,
-				userModel,
-				sessionModel,
-			),
-	);
-
-	router.post(
 		"/login",
 		authRateLimiter,
 		ZodValidatorMiddleware(loginDeleteRecoverAccSchema),
@@ -82,26 +68,50 @@ export function createAuthRouter({
 		authControllers.logoutController(req, res, next, userModel, sessionModel),
 	);
 
+	router.post("/token/refresh", refreshTokenHandler, (req, res, next) =>
+		authControllers.tokenRotationController(req, res, next, userModel, sessionModel),
+	);
+
+	// ── OTP ────────────────────────────────────────────────────────────────────
+
+	router.post(
+		"/otp/verify",
+		otpVerificationLimiter,
+		ZodValidatorMiddleware(otpSchema),
+		(req, res, next) =>
+			authControllers.verificationController(req, res, next, userModel, sessionModel),
+	);
+
+	router.post(
+		"/otp/resend",
+		ZodValidatorMiddleware(otpResendSchema),
+		otpGenerationLimiter,
+		(req, res, next) =>
+			authControllers.resendOtpController(req, res, next, userModel),
+	);
+
+	// ── Password ───────────────────────────────────────────────────────────────
+
+	router.post("/password/forgot", (req, res, next) =>
+		authControllers.forgotPasswordEmailController(req, res, next, userModel),
+	);
+
+	// ── Account ────────────────────────────────────────────────────────────────
+
+	router.get("/account", accessTokenHandler, (req, res, next) =>
+		authControllers.getUserAccountController(req, res, next, userModel),
+	);
+
 	router.patch(
-		"/account/update",
+		"/account",
 		ZodValidatorMiddleware(updateDetailsSchema),
 		accessTokenHandler,
 		(req, res, next) =>
 			authControllers.updateDetailsController(req, res, next, userModel),
 	);
 
-	router.patch(
-		"/profile/update",
-		accessTokenHandler,
-		fileUploadMiddleware,
-		profileUpdateLimiter,
-		ZodValidatorMiddleware(profileUpdateSchema),
-		(req, res, next) =>
-			authControllers.updateProfile(req, res, next, userModel),
-	);
-
 	router.delete(
-		"/account/delete",
+		"/account",
 		ZodValidatorMiddleware(loginDeleteRecoverAccSchema),
 		strictAuthHandler,
 		(req, res, next) =>
@@ -113,53 +123,18 @@ export function createAuthRouter({
 		ZodValidatorMiddleware(loginDeleteRecoverAccSchema),
 		strictAuthHandler,
 		(req, res, next) =>
-			authControllers.recoverDeletedAccountController(
-				req,
-				res,
-				next,
-				userModel,
-				sessionModel,
-			),
+			authControllers.recoverDeletedAccountController(req, res, next, userModel, sessionModel),
 	);
 
-	router.get("/account/info", accessTokenHandler, (req, res, next) =>
-		authControllers.getUserAccountController(req, res, next, userModel),
-	);
-
-	router.post("/forgot-password/init", (req, res, next) =>
-		authControllers.forgotPasswordEmailController(req, res, next, userModel),
-	);
-
-router.post("/token/refresh", refreshTokenHandler, (req, res, next) =>
-		authControllers.tokenRotationController(
-			req,
-			res,
-			next,
-			userModel,
-			sessionModel,
-		),
-	);
-
-	router.post(
-		"/resend-otp",
-		ZodValidatorMiddleware(otpResendSchema),
-		otpGenerationLimiter,
+	router.patch(
+		"/account/profile",
+		accessTokenHandler,
+		fileUploadMiddleware,
+		profileUpdateLimiter,
+		ZodValidatorMiddleware(profileUpdateSchema),
 		(req, res, next) =>
-			authControllers.resendOtpController(req, res, next, userModel),
+			authControllers.updateProfile(req, res, next, userModel),
 	);
-
-	// router.post(
-	// 	"/phone/send-verification",
-	// 	ZodValidatorMiddleware(phoneGetNumberSchema),
-	// 	otpGenerationLimiter,
-	// 	authControllers.getPhoneNumberController,
-	// );
-
-	// router.post('/phone/verify',
-	// 	ZodValidatorMiddleware(phoneVerificationSchema),
-	// 	otpVerificationLimiter,
-	// 	authControllers.verifyPhoneController,
-	// );
 
 	return router;
 }
