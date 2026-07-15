@@ -21,7 +21,7 @@ export function createApiKeyRouter({
 	const router = Router();
 
 	router.post(
-		"/create/apikey",
+		"/",
 		apiCreationLimiter,
 		ZodValidatorMiddleware(apiKeyCreationSchema),
 		(req, res, next) =>
@@ -34,7 +34,7 @@ export function createApiKeyRouter({
 			),
 	);
 
-	router.get("/list/apikeys", generalApiKeyLimiter, (req, res, next) =>
+	router.get("/", generalApiKeyLimiter, (req, res, next) =>
 		apiKeyController.listApiKeysController(
 			req,
 			res,
@@ -45,7 +45,7 @@ export function createApiKeyRouter({
 	);
 
 	router.patch(
-		"/update",
+		"/:keyId",
 		apiKeyUpdateLimiter,
 		ZodValidatorMiddleware(updateApiKeySchema),
 		(req, res, next) =>
@@ -58,7 +58,7 @@ export function createApiKeyRouter({
 			),
 	);
 
-	router.delete("/delete/:keyId", generalApiKeyLimiter, (req, res, next) =>
+	router.delete("/:keyId", generalApiKeyLimiter, (req, res, next) =>
 		apiKeyController.deleteApiKeyController(
 			req,
 			res,

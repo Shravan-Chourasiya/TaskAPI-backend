@@ -218,8 +218,8 @@ export const updateApiKeyController = async (
 	apiKeyModel: Model<ApiKeyDocument, ApiKeyStaticMethods>,
 ) => {
 	try {
-		const { keyId, keyUpdatesDetails }: z.infer<typeof updateApiKeySchema> =
-			req.body;
+		const { keyId } = req.params;
+		const { keyUpdatesDetails }: z.infer<typeof updateApiKeySchema> = req.body;
 		if (!keyId || !keyUpdatesDetails) {
 			return res
 				.status(400)
