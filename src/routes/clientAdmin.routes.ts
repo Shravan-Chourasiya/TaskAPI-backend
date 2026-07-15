@@ -27,7 +27,8 @@ export function createClientAdminRouter({
 		clientAdminControllers.getAllUsersList(req, res, next, clientUserModel),
 	);
 
-	router.get("/users/:f", (req, res, next) =>
+	// filter via ?status=active  (was /:f)
+	router.get("/users/filter", (req, res, next) =>
 		clientAdminControllers.getFilteredUsersList(req, res, next, clientUserModel),
 	);
 
@@ -35,21 +36,23 @@ export function createClientAdminRouter({
 		clientAdminControllers.addUser(req, res, next, clientUserModel),
 	);
 
-	router.delete("/users/:userId/delete", (req, res, next) =>
-		clientAdminControllers.deleteUser(req, res, next, clientUserModel),
-	);
-
 	router.patch("/users/:userId", (req, res, next) =>
 		clientAdminControllers.modifyUser(req, res, next, clientUserModel),
 	);
 
-	router.patch("/users/:id/blacklist", (req, res, next) =>
-		clientAdminControllers.blackListOrBlockUser(req, res, next, clientUserModel),
+	// DELETE on resource directly — no /delete suffix
+	router.delete("/users/:userId", (req, res, next) =>
+		clientAdminControllers.deleteUser(req, res, next, clientUserModel),
 	);
 
-	router.patch("/users/:id/unblacklist", (req, res, next) =>
-		clientAdminControllers.unBlackListUser(req, res, next, clientUserModel),
-	);
+	// unified status endpoint — action passed in body: { action: "blacklist" | "unblacklist" }
+	router.patch("/users/:userId/status", (req, res, next) => {
+		const { action } = req.body as { action?: string };
+		if (action === "unblacklist") {
+			return clientAdminControllers.unBlackListUser(req, res, next, clientUserModel);
+		}
+		return clientAdminControllers.blackListOrBlockUser(req, res, next, clientUserModel);
+	});
 
 	return router;
 }

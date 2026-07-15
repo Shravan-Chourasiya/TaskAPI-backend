@@ -46,8 +46,8 @@ export async function getFilteredUsersList(
 	clientUserModel: ClientUserStaticMethods,
 ) {
 	try {
-		const { f } = req.params;
-		if (!f || f === "") {
+		const status = req.query.status;
+		if (!status || typeof status !== "string" || status.trim() === "") {
 			return res
 				.status(400)
 				.json(standardResponse(false, "Fill missing fields", null));
@@ -56,7 +56,7 @@ export async function getFilteredUsersList(
 		const clientId = resolveClientId(req, res);
 		if (!clientId) return;
 
-		const users = await clientUserModel.find({ clientId, status: f }).lean();
+		const users = await clientUserModel.find({ clientId, status }).lean();
 		if (!users || users.length === 0) {
 			return res
 				.status(404)
@@ -195,20 +195,20 @@ export async function blackListOrBlockUser(
 	clientUserModel: ClientUserStaticMethods,
 ) {
 	try {
-		const { id } = req.params;
+		const { userId } = req.params;
 		const { blackListReason }: { blackListReason?: string } = req.body;
 
 		const clientId = resolveClientId(req, res);
 		if (!clientId) return;
 
-		if (!id) {
+		if (!userId) {
 			return res
 				.status(400)
 				.json(standardResponse(false, "Missing Required Data", null));
 		}
 
 		const blackListedUser = await clientUserModel.findOneAndUpdate(
-			{ clientId, _id: id },
+			{ clientId, _id: userId },
 			{
 				isDeleted: true,
 				status: "blacklisted",
@@ -245,19 +245,19 @@ export async function unBlackListUser(
 	clientUserModel: ClientUserStaticMethods,
 ) {
 	try {
-		const { id } = req.params;
+		const { userId } = req.params;
 
 		const clientId = resolveClientId(req, res);
 		if (!clientId) return;
 
-		if (!id) {
+		if (!userId) {
 			return res
 				.status(400)
 				.json(standardResponse(false, "Missing Required Data", null));
 		}
 
 		const unBlacklistedUser = await clientUserModel.findOneAndUpdate(
-			{ clientId, _id: id, status: "blacklisted" },
+			{ clientId, _id: userId, status: "blacklisted" },
 			{
 				isDeleted: false,
 				status: "active",
