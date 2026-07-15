@@ -25,11 +25,11 @@ export function createDashboardRouter({
 
 	const deps = { userModel, apiKeyModel, clientUserModel, Rollup5m, Rollup1h, Rollup1d };
 
-	router.get("/client/all-apis", (req, res, next) =>
+	router.get("/api-keys", (req, res, next) =>
 		dashboardControllers.getAllApiMetricsController(req, res, next, deps),
 	);
 
-	router.get("/client/all-apis/:apikeyid", (req, res, next) =>
+	router.get("/api-keys/:keyId", (req, res, next) =>
 		dashboardControllers.getSpecificApiMetricsController(req, res, next, deps),
 	);
 

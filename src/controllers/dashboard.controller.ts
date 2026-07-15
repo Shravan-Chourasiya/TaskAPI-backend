@@ -195,7 +195,7 @@ export async function getSpecificApiMetricsController(
 	{ userModel, apiKeyModel, Rollup5m, Rollup1h, Rollup1d }: ControllerDeps,
 ) {
 	try {
-		const apiId = req.params.apikeyid;
+		const apiId = req.params.keyId;
 		if (!apiId) {
 			return res
 				.status(400)
