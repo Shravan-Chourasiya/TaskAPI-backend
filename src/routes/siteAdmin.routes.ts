@@ -39,7 +39,8 @@ export function createSiteAdminRouter({
 		usersController.getAllUsers(req, res, next, userModel),
 	);
 
-	router.get("/users/filter/:status", (req, res, next) =>
+	// filter via ?status=suspended  (was /users/filter/:status)
+	router.get("/users/filter", (req, res, next) =>
 		usersController.getFilteredUsers(req, res, next, userModel),
 	);
 
@@ -47,7 +48,8 @@ export function createSiteAdminRouter({
 		usersController.getUserById(req, res, next, userModel),
 	);
 
-	router.patch("/users/:userId/action",
+	router.patch(
+		"/users/:userId/status",
 		ZodValidatorMiddleware(userActionSchema),
 		(req, res, next) => usersController.userAction(req, res, next, userModel),
 	);
@@ -56,9 +58,9 @@ export function createSiteAdminRouter({
 		usersController.restoreUser(req, res, next, userModel),
 	);
 
-	// ── API Keys ───────────────────────────────────────────────────────────────
+	// ── API Keys nested under user ─────────────────────────────────────────────
 
-	router.get("/api-keys/:userId", (req, res, next) =>
+	router.get("/users/:userId/api-keys", (req, res, next) =>
 		apiKeysController.getUserApiKeys(req, res, next, { userModel, apiKeyModel }),
 	);
 
@@ -70,13 +72,14 @@ export function createSiteAdminRouter({
 		apiKeysController.blacklistApiKey(req, res, next, { userModel, apiKeyModel }),
 	);
 
-	// ── Subscriptions ──────────────────────────────────────────────────────────
+	// ── Subscription nested under user ─────────────────────────────────────────
 
-	router.get("/subscriptions/:userId", (req, res, next) =>
+	router.get("/users/:userId/subscription", (req, res, next) =>
 		subscriptionsController.getUserSubscription(req, res, next, { userModel, subscriptionModel }),
 	);
 
-	router.patch("/subscriptions/:userId",
+	router.patch(
+		"/users/:userId/subscription",
 		ZodValidatorMiddleware(modifySubscriptionSchema),
 		(req, res, next) => subscriptionsController.modifyUserSubscription(req, res, next, { userModel, subscriptionModel }),
 	);

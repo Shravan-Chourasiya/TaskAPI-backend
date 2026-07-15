@@ -38,7 +38,7 @@ export async function getFilteredUsers(
 		const admin = await resolveAdminUser(req, res, userModel);
 		if (!admin) return;
 
-		const { status } = req.params;
+		const status = req.query.status;
 		if (!status || typeof status !== "string" || status.trim() === "") {
 			return res.status(400).json(standardResponse(false, "Status filter is required", null));
 		}
