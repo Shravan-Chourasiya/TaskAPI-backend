@@ -1,5 +1,6 @@
 import express from "express";
 import cookieParser from "cookie-parser";
+import helmet from "helmet"
 import morgan from "morgan";
 import dbConnect, { getDbConnection } from "./configs/mongodb.init.js";
 import { config } from "./configs/app.config.js";
@@ -51,6 +52,7 @@ const apiKeyModel = initApiKeyModel(TaskapiDb);
 const subscriptionModel = initSubscriptionModel(TaskapiDb);
 const clientUserModel = initClientUserModel(TaskapiClientsDb);
 const rawEventsClientModel = initRawEventModel(TaskapiClientsDb);
+const rawEventModel = initRawEventModel(TaskapiDb);
 const watermarkModel = initWatermarkModel(TaskapiClientsDb);
 const { Rollup5m, Rollup1h, Rollup1d } = createRollupModels(TaskapiClientsDb);
 //alias kept for readability during transition
@@ -109,6 +111,7 @@ const siteAdminRouter: express.Router = createSiteAdminRouter({
 	apiKeyModel,
 	subscriptionModel,
 	sessionModel,
+	rawEventModel,
 });
 
 const dashboardRouter: express.Router = createDashboardRouter({
@@ -132,6 +135,7 @@ const corsOptions = {
 
 app.use(express.json());
 app.use(cookieParser());
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(morgan(config.NODE_ENV === "production" ? "combined" : "development"));
 app.use(cors(corsOptions));
 app.use(createMetricsMiddleware(rawEventsClientModel));
