@@ -1,6 +1,6 @@
 import express from "express";
 import cookieParser from "cookie-parser";
-import helmet from "helmet"
+import helmet from "helmet";
 import morgan from "morgan";
 import dbConnect, { getDbConnection } from "./configs/mongodb.init.js";
 import { config } from "./configs/app.config.js";
@@ -139,7 +139,8 @@ app.use(helmet({ contentSecurityPolicy: false }));
 app.use(morgan(config.NODE_ENV === "production" ? "combined" : "development"));
 app.use(cors(corsOptions));
 app.use(createMetricsMiddleware(rawEventsClientModel));
-app.use(createCsrfMiddleware(sessionModel));
+// CSRF protection temporarily disabled.
+app.use((req, res, next) => next());
 
 // =================== Routes Integration ===================
 

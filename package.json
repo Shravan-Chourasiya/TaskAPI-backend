@@ -10,6 +10,7 @@
     "clear": "tsx dbresetScript.ts",
     "seed:admin": "tsx src/scripts/seedAdmin.ts",
     "test:metrics": "tsx scripts/testMetrics.ts",
+    "test:bhash": "tsx scripts/bcrypt.ts",
     "typecheck": "tsc --noEmit",
     "build": "tsc",
     "lint": "eslint . --ext .ts"
