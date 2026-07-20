@@ -48,7 +48,8 @@ export type UserType = {
 	deletedBy: string;
 	is2FAEnabled: boolean;
 	twoFASecret: string;
-	twoFA_Options: "email" | "sms" | "authenticator";
+	pending2FASecret: string | null;
+	twoFA_Options: "email" | "sms" | "authenticator" | "none";
 	isBlackListed: boolean;
 	blackListReason: string;
 	blackListedAt: Date;

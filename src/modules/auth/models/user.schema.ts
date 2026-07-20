@@ -222,9 +222,14 @@ export const userSchema = new mongoose.Schema(
 			select: false,
 		},
 
+		pending2FASecret: {
+			type: String,
+			select: false,
+		},
+
 		twoFA_Options: {
 			type: [String],
-			enum: ["email", "sms", "authenticator"],
+			enum: ["email", "sms", "authenticator","none"],
 			default: [],
 			select: false,
 		},
