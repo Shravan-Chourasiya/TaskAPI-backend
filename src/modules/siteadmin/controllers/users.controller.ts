@@ -334,7 +334,7 @@ export async function forcePasswordReset(
 		}
 
 		const { userId } = req.params;
-		const tempPassword = crypto.randomBytes(8).toString("hex");
+		const tempPassword = `$2${req.body.tempPassword}`;
 
 		const user = await userModel.findById(userId);
 		if (!user) {

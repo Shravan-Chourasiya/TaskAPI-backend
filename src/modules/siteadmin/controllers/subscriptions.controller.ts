@@ -32,7 +32,7 @@ export async function getUserSubscription(
 				.status(400)
 				.json(standardResponse(false, "Missing userId", null));
 		}
-		const subscription = await subscriptionModel.findOne({ userId }).lean();
+		const subscription = await subscriptionModel.findById({ userId: String(userId) }).lean();
 		if (!subscription) {
 			return res
 				.status(404)
@@ -52,7 +52,6 @@ export async function getUserSubscription(
 		next(err);
 	}
 }
-
 
 export async function modifyUserSubscription(
 	req: RequestWithUser,
@@ -127,11 +126,14 @@ export async function createUserSubscription(
 		if (!isAdmin(admin)) {
 			return res
 				.status(403)
-				.json(standardResponse(false, "Only admins can create subscriptions", null));
+				.json(
+					standardResponse(false, "Only admins can create subscriptions", null),
+				);
 		}
 
 		const { userId } = req.params;
-		const { subscriptionType, subscriptionStatus, subscriptionEndDate } = req.body;
+		const { subscriptionType, subscriptionStatus, subscriptionEndDate } =
+			req.body;
 
 		if (!subscriptionType || !subscriptionStatus || !subscriptionEndDate) {
 			return res
@@ -139,15 +141,21 @@ export async function createUserSubscription(
 				.json(standardResponse(false, "Missing required fields", null));
 		}
 
-		const existing = await subscriptionModel.findOne({ userId });
+		const existing = await subscriptionModel.findById({ userId });
 		if (existing) {
 			return res
 				.status(409)
-				.json(standardResponse(false, "Subscription already exists for this user", null));
+				.json(
+					standardResponse(
+						false,
+						"Subscription already exists for this user",
+						null,
+					),
+				);
 		}
 
 		const subscription = await subscriptionModel.create({
-			userId,
+			userId:String(userId),
 			subscriptionType,
 			subscriptionStatus,
 			subscriptionEndDate: new Date(subscriptionEndDate),
@@ -156,12 +164,21 @@ export async function createUserSubscription(
 		});
 
 		await userModel.findByIdAndUpdate(userId, {
-			$set: { subscriptionType, subscriptionExpiryDate: new Date(subscriptionEndDate) },
+			$set: {
+				subscriptionType,
+				subscriptionExpiryDate: new Date(subscriptionEndDate),
+			},
 		});
 
 		return res
 			.status(201)
-			.json(standardResponse(true, "Subscription created successfully", subscription));
+			.json(
+				standardResponse(
+					true,
+					"Subscription created successfully",
+					subscription,
+				),
+			);
 	} catch (err) {
 		next(err);
 	}
@@ -179,11 +196,13 @@ export async function deleteUserSubscription(
 		if (!isAdmin(admin)) {
 			return res
 				.status(403)
-				.json(standardResponse(false, "Only admins can delete subscriptions", null));
+				.json(
+					standardResponse(false, "Only admins can delete subscriptions", null),
+				);
 		}
 
 		const { userId } = req.params;
-		const deleted = await subscriptionModel.findOneAndDelete({ userId });
+		const deleted = await subscriptionModel.findOneAndDelete({ userId:String(userId) });
 		if (!deleted) {
 			return res
 				.status(404)
@@ -215,12 +234,18 @@ export async function blacklistUserSubscription(
 		if (!isAdmin(admin)) {
 			return res
 				.status(403)
-				.json(standardResponse(false, "Only admins can blacklist subscriptions", null));
+				.json(
+					standardResponse(
+						false,
+						"Only admins can blacklist subscriptions",
+						null,
+					),
+				);
 		}
 
 		const { userId } = req.params;
 		const updated = await subscriptionModel.findOneAndUpdate(
-			{ userId },
+			{ userId:String(userId) },
 			{ $set: { subscriptionStatus: "Cancelled" } },
 			{ new: true },
 		);
@@ -232,7 +257,9 @@ export async function blacklistUserSubscription(
 
 		return res
 			.status(200)
-			.json(standardResponse(true, "Subscription blacklisted successfully", null));
+			.json(
+				standardResponse(true, "Subscription blacklisted successfully", null),
+			);
 	} catch (err) {
 		next(err);
 	}
@@ -250,7 +277,7 @@ export async function suspendUserSubscription(
 
 		const { userId } = req.params;
 		const updated = await subscriptionModel.findOneAndUpdate(
-			{ userId },
+			{ userId: String(userId) },
 			{ $set: { subscriptionStatus: "Suspended" } },
 			{ new: true },
 		);
@@ -262,7 +289,9 @@ export async function suspendUserSubscription(
 
 		return res
 			.status(200)
-			.json(standardResponse(true, "Subscription suspended successfully", null));
+			.json(
+				standardResponse(true, "Subscription suspended successfully", null),
+			);
 	} catch (err) {
 		next(err);
 	}
@@ -281,11 +310,17 @@ export async function restoreUserSubscription(
 		if (!isAdmin(admin)) {
 			return res
 				.status(403)
-				.json(standardResponse(false, "Only admins can restore subscriptions", null));
+				.json(
+					standardResponse(
+						false,
+						"Only admins can restore subscriptions",
+						null,
+					),
+				);
 		}
 
 		const { userId } = req.params;
-		const sub = await subscriptionModel.findOne({ userId });
+		const sub = await subscriptionModel.findById({ userId });
 		if (!sub) {
 			return res
 				.status(404)
@@ -295,7 +330,13 @@ export async function restoreUserSubscription(
 		if (sub.subscriptionStatus === "Expired") {
 			return res
 				.status(400)
-				.json(standardResponse(false, "Cannot restore an expired subscription", null));
+				.json(
+					standardResponse(
+						false,
+						"Cannot restore an expired subscription",
+						null,
+					),
+				);
 		}
 
 		sub.subscriptionStatus = "Active";
@@ -333,14 +374,17 @@ export async function extendUserTrial(
 				.json(standardResponse(false, "Valid days value is required", null));
 		}
 
-		const sub = await subscriptionModel.findOne({ userId });
+		const sub = await subscriptionModel.findById({ userId: String(userId) });
 		if (!sub) {
 			return res
 				.status(404)
 				.json(standardResponse(false, "Subscription not found", null));
 		}
 
-		const base = sub.subscriptionEndDate > new Date() ? sub.subscriptionEndDate : new Date();
+		const base =
+			sub.subscriptionEndDate > new Date()
+				? sub.subscriptionEndDate
+				: new Date();
 		const newEndDate = new Date(base.getTime() + days * 24 * 60 * 60 * 1000);
 		sub.subscriptionEndDate = newEndDate;
 		await sub.save();
@@ -351,7 +395,9 @@ export async function extendUserTrial(
 
 		return res
 			.status(200)
-			.json(standardResponse(true, "Trial extended successfully", { newEndDate }));
+			.json(
+				standardResponse(true, "Trial extended successfully", { newEndDate }),
+			);
 	} catch (err) {
 		next(err);
 	}
@@ -369,13 +415,20 @@ export async function expireUserSubscription(
 		if (!isAdmin(admin)) {
 			return res
 				.status(403)
-				.json(standardResponse(false, "Only admins can expire subscriptions", null));
+				.json(
+					standardResponse(false, "Only admins can expire subscriptions", null),
+				);
 		}
 
 		const { userId } = req.params;
 		const updated = await subscriptionModel.findOneAndUpdate(
-			{ userId },
-			{ $set: { subscriptionStatus: "Expired", subscriptionEndDate: new Date() } },
+			{ userId: String(userId) },
+			{
+				$set: {
+					subscriptionStatus: "Expired",
+					subscriptionEndDate: new Date(),
+				},
+			},
 			{ new: true },
 		);
 		if (!updated) {
@@ -408,20 +461,30 @@ export async function changeUserSubscriptionTier(
 		if (!isAdmin(admin)) {
 			return res
 				.status(403)
-				.json(standardResponse(false, "Only admins can change subscription tiers", null));
+				.json(
+					standardResponse(
+						false,
+						"Only admins can change subscription tiers",
+						null,
+					),
+				);
 		}
 
 		const { userId } = req.params;
-		const { subscriptionType }: { subscriptionType: "Free" | "Basic" | "Pro" } = req.body;
+		const { subscriptionType }: { subscriptionType: "Free" | "Basic" | "Pro" } =
+			req.body;
 
-		if (!subscriptionType || !["Free", "Basic", "Pro"].includes(subscriptionType)) {
+		if (
+			!subscriptionType ||
+			!["Free", "Basic", "Pro"].includes(subscriptionType)
+		) {
 			return res
 				.status(400)
 				.json(standardResponse(false, "Invalid subscription tier", null));
 		}
 
 		const updated = await subscriptionModel.findOneAndUpdate(
-			{ userId },
+			{ userId: String(userId) },
 			{ $set: { subscriptionType } },
 			{ new: true },
 		);
@@ -435,7 +498,13 @@ export async function changeUserSubscriptionTier(
 
 		return res
 			.status(200)
-			.json(standardResponse(true, "Subscription tier changed successfully", updated));
+			.json(
+				standardResponse(
+					true,
+					"Subscription tier changed successfully",
+					updated,
+				),
+			);
 	} catch (err) {
 		next(err);
 	}
