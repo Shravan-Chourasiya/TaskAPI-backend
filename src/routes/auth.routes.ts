@@ -13,6 +13,9 @@ import {
 	registerSchema,
 	updateDetailsSchema,
 	profileUpdateSchema,
+	twoFAVerifySchema,
+	emailSchema,
+	totpSchema,
 } from "../libs/zod/auth.zodschema.js";
 import {
 	authRateLimiter,
@@ -69,7 +72,13 @@ export function createAuthRouter({
 	);
 
 	router.post("/token/refresh", refreshTokenHandler, (req, res, next) =>
-		authControllers.tokenRotationController(req, res, next, userModel, sessionModel),
+		authControllers.tokenRotationController(
+			req,
+			res,
+			next,
+			userModel,
+			sessionModel,
+		),
 	);
 
 	// ── OTP ────────────────────────────────────────────────────────────────────
@@ -79,7 +88,13 @@ export function createAuthRouter({
 		otpVerificationLimiter,
 		ZodValidatorMiddleware(otpSchema),
 		(req, res, next) =>
-			authControllers.verificationController(req, res, next, userModel, sessionModel),
+			authControllers.verificationController(
+				req,
+				res,
+				next,
+				userModel,
+				sessionModel,
+			),
 	);
 
 	router.post(
@@ -123,7 +138,13 @@ export function createAuthRouter({
 		ZodValidatorMiddleware(loginDeleteRecoverAccSchema),
 		strictAuthHandler,
 		(req, res, next) =>
-			authControllers.recoverDeletedAccountController(req, res, next, userModel, sessionModel),
+			authControllers.recoverDeletedAccountController(
+				req,
+				res,
+				next,
+				userModel,
+				sessionModel,
+			),
 	);
 
 	router.patch(
@@ -134,6 +155,40 @@ export function createAuthRouter({
 		ZodValidatorMiddleware(profileUpdateSchema),
 		(req, res, next) =>
 			authControllers.updateProfile(req, res, next, userModel),
+	);
+
+	router.post(
+		"/account/2fa/enable",
+		accessTokenHandler,
+		(req: any, res, next) =>
+			authControllers.enable2FAController(req, res, next, userModel),
+	);
+	router.post(
+		"/account/2fa/confirm",
+		accessTokenHandler,
+		ZodValidatorMiddleware(totpSchema),
+		(req: any, res, next) =>
+			authControllers.confirm2FAController(req, res, next, userModel),
+	);
+
+	router.post(
+		"/account/2fa/verify",
+		ZodValidatorMiddleware(totpSchema),
+		(req: any, res, next) =>
+			authControllers.verify2FAController(
+				req,
+				res,
+				next,
+				userModel,
+				sessionModel,
+			),
+	);
+	router.post(
+		"/account/2fa/disable",
+		accessTokenHandler,
+		ZodValidatorMiddleware(totpSchema),
+		(req: any, res, next) =>
+			authControllers.disable2FAController(req, res, next, userModel),
 	);
 
 	return router;
