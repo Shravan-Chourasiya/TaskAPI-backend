@@ -145,3 +145,19 @@ export const forgotPasswordUpdateSchema = z.object({
 export const otpResendSchema = z.object({
 	email: emailSchema,
 });
+
+// 2FA verification schema
+export const twoFAVerifySchema = z.object({
+	email: emailSchema,
+	token: z
+		.string()
+		.length(6, "OTP must be exactly 6 digits")
+		.regex(/^\d{6}$/, "OTP must contain only digits"),
+});
+
+export const totpSchema = z.object({
+	token: z
+		.string()
+		.length(6, "OTP must be exactly 6 digits")
+		.regex(/^\d{6}$/, "OTP must contain only digits"),
+});

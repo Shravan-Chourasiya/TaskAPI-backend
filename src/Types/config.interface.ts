@@ -8,6 +8,7 @@ export interface Config {
 	POSTGRES_DB_URI: string;
 	REFRESH_TOKEN_JWT_SECRET: string;
 	ACCESS_TOKEN_JWT_SECRET: string;
+	TEMP_TOKEN_JWT_SECRET: string;
 	NODE_ENV: string;
 	GMAIL_USER_EMAIL: string;
 	GMAIL_REFRESH_TOKEN: string;
