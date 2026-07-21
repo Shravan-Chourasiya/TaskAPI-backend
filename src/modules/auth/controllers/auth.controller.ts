@@ -268,6 +268,7 @@ export async function tokenRotationController(
 		}
 
 		const tokenFamily = crypto.randomBytes(16).toString("hex");
+		const csrfToken = generateCsrfToken();
 
 		const acToken = jwt.sign(
 			{ id: user._id, sessionId: session._id.toString(), type: "access" },
@@ -293,6 +294,7 @@ export async function tokenRotationController(
 			refreshTokenHash: newRfTokenHash,
 			isRevoked: false,
 			tokenFamily,
+			csrfToken,
 			refreshTokenExpiresAt: sevenDaysfromNow,
 			lastActivityAt: now,
 		});
@@ -309,6 +311,7 @@ export async function tokenRotationController(
 			sameSite: "lax",
 			maxAge: 600000,
 		});
+		res.setHeader("X-CSRF-Token", csrfToken);
 		res.status(200).json({
 			message: "AccessToken Refreshed Successfully !",
 		});
