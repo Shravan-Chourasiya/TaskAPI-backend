@@ -13,6 +13,7 @@ import {
 	issueTokensAndCreateSession,
 } from "../utils/authcontroller.utils.js";
 import { generateCsrfToken } from "../../../middlewares/csrf.middleware.js";
+import { sendCsrfResponse } from "../../../utils/apiResponse.utils.js";
 import * as z from "zod";
 import crypto from "crypto";
 import { v4 as uuidv4 } from "uuid";
@@ -311,8 +312,7 @@ export async function tokenRotationController(
 			sameSite: "lax",
 			maxAge: 600000,
 		});
-		res.setHeader("X-CSRF-Token", csrfToken);
-		res.status(200).json({
+		return sendCsrfResponse(req, res, csrfToken, 200, {
 			message: "AccessToken Refreshed Successfully !",
 		});
 	} catch (error) {
@@ -868,7 +868,7 @@ export async function resendOtpController(
 	}
 }
 
-export async function getPhoneNumberController(
+export async function setPhoneNumberController(
 	req: Request,
 	res: Response,
 	next: NextFunction,
@@ -901,7 +901,7 @@ export async function getPhoneNumberController(
 }
 
 export async function verifyPhoneController(
-	req: Request,
+	req: RequestWithUser,
 	res: Response,
 	next: NextFunction,
 	userModel: Model<UserDocument, UserStaticMethods>,
@@ -917,15 +917,23 @@ export async function verifyPhoneController(
 		if (!result.success) {
 			return res.status(400).json({ message: result.message });
 		}
-		const user: UserDocument | null = await userModel.findOneAndUpdate(
-			{ phoneNumber },
-			{ isPhoneVerified: true },
-		);
+		const user: UserDocument | null = await userModel.findById(req.userID);
 		if (!user) {
 			return res
 				.status(404)
-				.json({ message: "User Not Found! | Failed to verify phone number." });
+				.json(
+					standardResponse(
+						false,
+						"User Not Found! | Failed to verify phone number.",
+						null,
+					),
+				);
 		}
+
+		user.isPhoneVerified = true;
+		user.phone = phoneNumber;
+		await user.save();
+
 		return res.status(200).json({
 			message: "Phone verification successful!",
 		});
