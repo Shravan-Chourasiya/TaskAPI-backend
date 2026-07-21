@@ -17,6 +17,7 @@ import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { v4 as uuidv4 } from "uuid";
+import { sendCsrfResponse, standardResponse } from "../../../utils/apiResponse.utils.js";
 
 export const OTP_PREFIX = APP_REDIS_PREFIXES.OTP_STORAGE;
 export { AUTH_OTP_PURPOSES };
@@ -174,8 +175,7 @@ export const issueTokensAndCreateSession = async (
 				sameSite: "lax",
 				maxAge: 600000,
 			});
-			res.setHeader("X-CSRF-Token", csrfToken);
-			return res.status(200).json({
+			return sendCsrfResponse(req, res, csrfToken, 200, {
 				success: true,
 				message: "User Logged in successfully!",
 				data: {
@@ -210,10 +210,7 @@ export const issueTokensAndCreateSession = async (
 			});
 
 			if (activeSessionCount >= 5) {
-				return res.status(403).json({
-					message:
-						"Maximum 5 devices allowed. Logout from another device first.",
-				});
+				return res.status(403).json(standardResponse(false, "Maximum active sessions reached. Please log out from another device."));
 			}
 			isUser.sessionDevices.push(deviceId);
 			await isUser.save();
@@ -283,9 +280,8 @@ export const issueTokensAndCreateSession = async (
 				sameSite: "lax",
 				maxAge: 604800000 * 4,
 			});
-			res.setHeader("X-CSRF-Token", csrfToken);
-			return res.status(200).json({
-				message: "User Logged in successfully!",
+			return sendCsrfResponse(req, res, csrfToken, 200, {
+				...standardResponse(true, "User Logged in successfully!", null),
 				data: {
 					username: isUser.username,
 					email: isUser.email,

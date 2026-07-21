@@ -1,3 +1,5 @@
+import type { Request, Response } from "express";
+
 interface ApiResponse {
 	success: boolean;
 	data?: object | null;
@@ -46,3 +48,25 @@ export const tokenMiddlewareResponse = (
 		},
 	};
 };
+
+/**
+ * Set CSRF token header, and also include it in the response body
+ * if the request is from Postman (no way to read custom headers in Postman easily).
+ */
+export function sendCsrfResponse(
+	req: Request,
+	res: Response,
+	csrfToken: string,
+	statusCode: number,
+	body: object,
+): void {
+	const isPostman = req.headers["user-agent"]?.startsWith("PostmanRuntime/");
+
+	res.setHeader("X-CSRF-Token", csrfToken);
+
+	if (isPostman && body) {
+		(body as Record<string, unknown>).csrfToken = csrfToken;
+	}
+
+	res.status(statusCode).json(body);
+}

@@ -7,7 +7,7 @@ const client = twilio(accountSid, authToken);
 
 export async function sendVerificationSMS(to: string, otp: string) {
 	const message = await client.messages.create({
-		body: `Your verification OTP is: ${otp}`    ,
+		body: `Your verification OTP is: ${otp}`,
 		from: config.TWILIO_PHONE_NUMBER,
 		to: to,
 	});
