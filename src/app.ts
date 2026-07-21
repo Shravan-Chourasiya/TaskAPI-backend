@@ -55,8 +55,6 @@ const rawEventsClientModel = initRawEventModel(TaskapiClientsDb);
 const rawEventModel = initRawEventModel(TaskapiDb);
 const watermarkModel = initWatermarkModel(TaskapiClientsDb);
 const { Rollup5m, Rollup1h, Rollup1d } = createRollupModels(TaskapiClientsDb);
-//alias kept for readability during transition
-const clientUsersStoreModel = clientUserModel;
 
 // await runTestMetrics(
 // 	rawEventsClientModel,
@@ -139,8 +137,7 @@ app.use(helmet({ contentSecurityPolicy: false }));
 app.use(morgan(config.NODE_ENV === "production" ? "combined" : "development"));
 app.use(cors(corsOptions));
 app.use(createMetricsMiddleware(rawEventsClientModel));
-// CSRF protection temporarily disabled.
-app.use((req, res, next) => next());
+app.use(createCsrfMiddleware(sessionModel));
 
 // =================== Routes Integration ===================
 
