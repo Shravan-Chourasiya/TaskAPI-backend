@@ -338,6 +338,7 @@ export async function logoutController(
 		const session = await sessionModel
 			.findOne({
 				userId: rfTokenDecoded.id,
+				deviceId: rfTokenDecoded.deviceId,
 				isRevoked: false,
 			})
 			.select("+refreshTokenHash");

@@ -94,11 +94,26 @@ export const refreshTokenHandlerFunction = async (
 		config.REFRESH_TOKEN_JWT_SECRET,
 	) as JwtPayload;
 
+	if (!decoded) {
+		return res
+			.status(401)
+			.json(
+				tokenMiddlewareResponse(
+					false,
+					"Invalid refresh token",
+					"InvalidToken",
+					true,
+				),
+			);
+	}
+
 	// 2. Find active session in database
 	const session = await sessionModel
 		.findOne({
 			userId: decoded.id,
 			status: "active",
+			deviceId: decoded.deviceId,
+			tokenFamily: decoded.tokenFamily,
 			isRevoked: false,
 		})
 		.select("+refreshTokenHash"); // Include select: false field
