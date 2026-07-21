@@ -41,8 +41,11 @@ export const profileSchema = z.object({
 	avatarUrl: z.string().url("Invalid URL format").optional(),
 });
 
-export const phoneNumberSchema = z
+export const phoneNumberRegexSchema = z
 	.string()
+	.refine((val) => val.startsWith("+"), {
+		message: "Please add country code along with phone number (e.g. +9198xxxxxx)",
+	})
 	.e164()
 	.regex(/^\+?[1-9]\d{1,14}$/, "Invalid phone number format");
 
@@ -70,15 +73,13 @@ export const otpSchema = z.object({
 });
 
 // Phone get number schema
-export const phoneGetNumberSchema = z.object({
-	phoneNumber: phoneNumberSchema,
+export const phoneNumberSchema = z.object({
+	phoneNumber: phoneNumberRegexSchema,
 });
 
 // Phone verification schema
 export const phoneVerificationSchema = z.object({
-	phoneNumber: z
-		.e164()
-		.regex(/^\+?[1-9]\d{1,14}$/, "Invalid phone number format"),
+	phoneNumber: phoneNumberRegexSchema,
 	otp: z
 		.string()
 		.length(6, "OTP must be exactly 6 digits")
