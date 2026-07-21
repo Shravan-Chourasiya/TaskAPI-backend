@@ -16,6 +16,8 @@ import {
 	twoFAVerifySchema,
 	emailSchema,
 	totpSchema,
+	phoneNumberSchema,
+	phoneVerificationSchema,
 } from "../libs/zod/auth.zodschema.js";
 import {
 	authRateLimiter,
@@ -189,6 +191,22 @@ export function createAuthRouter({
 		ZodValidatorMiddleware(totpSchema),
 		(req: any, res, next) =>
 			authControllers.disable2FAController(req, res, next, userModel),
+	);
+
+	router.post(
+		"/account/phone",
+		accessTokenHandler,
+		ZodValidatorMiddleware(phoneNumberSchema),
+		(req, res, next) =>
+			authControllers.setPhoneNumberController(req, res, next),
+	);
+
+	router.post(
+		"/account/phone/verify",
+		ZodValidatorMiddleware(phoneVerificationSchema),
+		accessTokenHandler,
+		(req, res, next) =>
+			authControllers.verifyPhoneController(req, res, next, userModel),
 	);
 
 	return router;
