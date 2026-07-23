@@ -1,6 +1,8 @@
 import express from "express";
 import * as clientUserControllers from "../modules/clientauth/controllers/clientUser.controller.js";
 import { apikeyHandlerFunction } from "../middlewares/apikeyhandler.middleware.js";
+import { resolveIP } from "../middlewares/ipResolver.middleware.js";
+import { resolveScopes } from "../middlewares/scopeResolver.middleware.js";
 import { ZodValidatorMiddleware } from "../middlewares/zodvalidation.middleware.js";
 import { createPurposeValidatorMiddleware } from "../middlewares/purposevalidator.middleware.js";
 import { createMiddlewareWrapper } from "../utils/middlewareWrapper.js";
@@ -56,8 +58,20 @@ export function createClientUserRouter({
 		asyncErrorHandler,
 	);
 
+	const ipResolver = createMiddlewareWrapper(
+		apiKeyModel,
+		resolveIP,
+		asyncErrorHandler,
+	);
+
+	const scopeResolver = createMiddlewareWrapper(
+		apiKeyModel,
+		resolveScopes,
+		asyncErrorHandler,
+	);
+
 	const router = express.Router();
-	router.use(apikeyHandler, clientApiRateLimiter);
+	router.use(apikeyHandler, ipResolver, scopeResolver, clientApiRateLimiter);
 
 	// ── Auth ───────────────────────────────────────────────────────────────────
 
