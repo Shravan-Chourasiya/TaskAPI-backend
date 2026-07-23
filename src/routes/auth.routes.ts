@@ -13,7 +13,6 @@ import {
 	registerSchema,
 	updateDetailsSchema,
 	profileUpdateSchema,
-	twoFAVerifySchema,
 	emailSchema,
 	totpSchema,
 	phoneNumberSchema,
@@ -101,16 +100,20 @@ export function createAuthRouter({
 
 	router.post(
 		"/otp/resend",
-		ZodValidatorMiddleware(otpResendSchema),
 		otpGenerationLimiter,
+		ZodValidatorMiddleware(otpResendSchema),
 		(req, res, next) =>
 			authControllers.resendOtpController(req, res, next, userModel),
 	);
 
 	// ── Password ───────────────────────────────────────────────────────────────
 
-	router.post("/password/forgot", (req, res, next) =>
-		authControllers.forgotPasswordEmailController(req, res, next, userModel),
+	router.post(
+		"/password/forgot",
+		authRateLimiter,
+		ZodValidatorMiddleware(emailSchema),
+		(req, res, next) =>
+			authControllers.forgotPasswordEmailController(req, res, next, userModel),
 	);
 
 	// ── Account ────────────────────────────────────────────────────────────────
@@ -121,24 +124,24 @@ export function createAuthRouter({
 
 	router.patch(
 		"/account",
-		ZodValidatorMiddleware(updateDetailsSchema),
 		accessTokenHandler,
+		ZodValidatorMiddleware(updateDetailsSchema),
 		(req, res, next) =>
 			authControllers.updateDetailsController(req, res, next, userModel),
 	);
 
 	router.delete(
 		"/account",
-		ZodValidatorMiddleware(loginDeleteRecoverAccSchema),
 		strictAuthHandler,
+		ZodValidatorMiddleware(loginDeleteRecoverAccSchema),
 		(req, res, next) =>
 			authControllers.deleteAccountController(req, res, next, userModel),
 	);
 
 	router.patch(
 		"/account/recover",
-		ZodValidatorMiddleware(loginDeleteRecoverAccSchema),
 		strictAuthHandler,
+		ZodValidatorMiddleware(loginDeleteRecoverAccSchema),
 		(req, res, next) =>
 			authControllers.recoverDeletedAccountController(
 				req,
@@ -203,8 +206,8 @@ export function createAuthRouter({
 
 	router.post(
 		"/account/phone/verify",
-		ZodValidatorMiddleware(phoneVerificationSchema),
 		accessTokenHandler,
+		ZodValidatorMiddleware(phoneVerificationSchema),
 		(req, res, next) =>
 			authControllers.verifyPhoneController(req, res, next, userModel),
 	);
