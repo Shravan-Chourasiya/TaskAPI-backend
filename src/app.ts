@@ -93,6 +93,7 @@ const generalRouter: express.Router = createGeneralRouter({
 const apiKeyRouter: express.Router = createApiKeyRouter({
 	userModel,
 	apiKeyModel,
+	sessionModel,
 });
 const clientUserRouter: express.Router = createClientUserRouter({
 	userModel: clientUserModel,
@@ -102,6 +103,7 @@ const clientUserRouter: express.Router = createClientUserRouter({
 const clientAdminRouter: express.Router = createClientAdminRouter({
 	clientUserModel,
 	apiKeyModel,
+	sessionModel,
 });
 
 const siteAdminRouter: express.Router = createSiteAdminRouter({
@@ -116,6 +118,7 @@ const dashboardRouter: express.Router = createDashboardRouter({
 	userModel,
 	apiKeyModel,
 	clientUserModel,
+	sessionModel,
 	Rollup5m,
 	Rollup1h,
 	Rollup1d,
@@ -144,8 +147,8 @@ app.use(createCsrfMiddleware(sessionModel));
 app.use(`${BASE_URL}/auth`, apiRateLimiter, authRouter);
 app.use(`${BASE_URL}/subscription`, apiRateLimiter, subscriptionRouter);
 app.use(`${BASE_URL}/api-keys`, apiRateLimiter, apiKeyRouter);
-app.use(`${BASE_URL}/client/auth`, apiRateLimiter, clientUserRouter);
-app.use(`${BASE_URL}/client/admin`, apiRateLimiter, clientAdminRouter);
+app.use(`${BASE_URL}/client/auth`, clientUserRouter);
+app.use(`${BASE_URL}/client/admin`, clientAdminRouter);
 app.use(`${BASE_URL}/site-admin`, apiRateLimiter, siteAdminRouter);
 app.use(`${BASE_URL}/dashboard`, apiRateLimiter, dashboardRouter);
 
