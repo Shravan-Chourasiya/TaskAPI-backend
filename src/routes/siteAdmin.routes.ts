@@ -44,23 +44,23 @@ export function createSiteAdminRouter({
 
 	// ── Users ──────────────────────────────────────────────────────────────────
 
-	router.get("/users", (req, res, next) =>
+	router.get("/users/get-all", (req, res, next) =>
 		usersController.getAllUsers(req, res, next, userModel),
 	);
 
-	router.post("/users", (req, res, next) =>
+	router.post("/users/create", (req, res, next) =>
 		usersController.createUser(req, res, next, userModel),
 	);
 
-	router.patch("/users", (req, res, next) =>
+	router.patch("/users/modify", (req, res, next) =>
 		usersController.modifyUser(req, res, next, userModel),
 	);
 
-	router.patch("/users", (req, res, next) =>
+	router.patch("/users/force-password-reset", (req, res, next) =>
 		usersController.forcePasswordReset(req, res, next, userModel),
 	);
 
-	router.patch("/users", (req, res, next) =>
+	router.patch("/users/assign-role", (req, res, next) =>
 		usersController.assignUserRole(req, res, next, userModel),
 	);
 
@@ -140,54 +140,54 @@ export function createSiteAdminRouter({
 		}),
 	);
 
-	router.delete("/users/:userId/subscription", (req, res, next) =>
+	router.delete("/users/:userId/subscription/delete", (req, res, next) =>
 		subscriptionsController.deleteUserSubscription(req, res, next, {
 			userModel,
 			subscriptionModel,
 		}),
 	);
-	router.patch("/users/:userId/subscription", (req, res, next) =>
+	router.patch("/users/:userId/subscription/blacklist", (req, res, next) =>
 		subscriptionsController.blacklistUserSubscription(req, res, next, {
 			userModel,
 			subscriptionModel,
 		}),
 	);
-	router.patch("/users/:userId/subscription", (req, res, next) =>
+	router.patch("/users/:userId/subscription/suspend", (req, res, next) =>
 		subscriptionsController.suspendUserSubscription(req, res, next, {
 			userModel,
 			subscriptionModel,
 		}),
 	);
 
-	router.patch("/users/:userId/subscription", (req, res, next) =>
+	router.patch("/users/:userId/subscription/restore", (req, res, next) =>
 		subscriptionsController.restoreUserSubscription(req, res, next, {
 			userModel,
 			subscriptionModel,
 		}),
 	);
 
-	router.patch("/users/:userId/subscription", (req, res, next) =>
+	router.patch("/users/:userId/subscription/extend", (req, res, next) =>
 		subscriptionsController.extendUserTrial(req, res, next, {
 			userModel,
 			subscriptionModel,
 		}),
 	);
 
-	router.patch("/users/:userId/subscription", (req, res, next) =>
+	router.patch("/users/:userId/subscription/expire", (req, res, next) =>
 		subscriptionsController.expireUserSubscription(req, res, next, {
 			userModel,
 			subscriptionModel,
 		}),
 	);
 
-	router.patch("/users/:userId/subscription", (req, res, next) =>
+	router.patch("/users/:userId/subscription/change-plan", (req, res, next) =>
 		subscriptionsController.changeUserSubscriptionTier(req, res, next, {
 			userModel,
 			subscriptionModel,
 		}),
 	);
 
-	router.get("/users/:userId/subscription", (req, res, next) =>
+	router.get("/users/:userId/subscription/", (req, res, next) =>
 		subscriptionsController.getUserSubscription(req, res, next, {
 			userModel,
 			subscriptionModel,
@@ -195,7 +195,7 @@ export function createSiteAdminRouter({
 	);
 
 	router.patch(
-		"/users/:userId/subscription",
+		"/users/:userId/subscription/modify",
 		ZodValidatorMiddleware(modifySubscriptionSchema),
 		(req, res, next) =>
 			subscriptionsController.modifyUserSubscription(req, res, next, {
