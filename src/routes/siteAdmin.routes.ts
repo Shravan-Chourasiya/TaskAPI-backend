@@ -20,6 +20,8 @@ import * as auditlogsController from "../modules/siteadmin/controllers/auditlogs
 import * as apistatsController from "../modules/siteadmin/controllers/apistats.controller.js";
 import { RawEventModel } from "../modules/metrics/types/rawEvent.type.js";
 import { IRollupBucket } from "../modules/metrics/types/rollupData.type.js";
+import { RawAdminEventModel } from "../modules/siteadmin/models/adminEvent.type.js";
+import { createAdminMetricsMiddleware } from "../middlewares/adminMetricsCollector.middleware.js";
 
 export function createSiteAdminRouter({
 	userModel,
@@ -27,6 +29,7 @@ export function createSiteAdminRouter({
 	subscriptionModel,
 	sessionModel,
 	rawEventModel,
+	adminEventModel,
 	Rollup5m,
 	Rollup1h,
 	Rollup1d,
@@ -36,6 +39,7 @@ export function createSiteAdminRouter({
 	subscriptionModel: SubscriptionStaticMethods;
 	sessionModel: SessionStaticMethods;
 	rawEventModel: RawEventModel;
+	adminEventModel: RawAdminEventModel;
 	Rollup5m: Model<IRollupBucket>;
 	Rollup1h: Model<IRollupBucket>;
 	Rollup1d: Model<IRollupBucket>;
@@ -49,6 +53,19 @@ export function createSiteAdminRouter({
 	);
 
 	router.use(strictAuthHandler);
+
+	// Record admin actions (POST/PATCH/DELETE) to the admin-event collection.
+	// Runs after strictAuth + per-controller resolveAdminUser, so every request
+	// it records has a verified adminId + role. Read-only GETs are skipped to
+	// keep api_admin_events focused on actions (that's what the audit log is for).
+	const adminMetrics = createAdminMetricsMiddleware(adminEventModel);
+	router.use((req, res, next) => {
+		if (req.method !== "GET" && req.method !== "OPTIONS" && req.method !== "HEAD") {
+			adminMetrics(req, res, next);
+		} else {
+			next();
+		}
+	});
 
 	// ── Users ──────────────────────────────────────────────────────────────────
 
@@ -267,25 +284,25 @@ export function createSiteAdminRouter({
 	router.get("/audit-logs", (req, res, next) =>
 		auditlogsController.getAdminAuditLogs(req, res, next, {
 			userModel,
-			rawEventModel,
+			adminEventModel,
 		}),
 	);
 	router.get("/audit-logs/user/:userId", (req, res, next) =>
 		auditlogsController.getUserActivityLogs(req, res, next, {
 			userModel,
-			rawEventModel,
+			adminEventModel,
 		}),
 	);
 	router.get("/audit-logs/errors", (req, res, next) =>
 		auditlogsController.getErrorLogs(req, res, next, {
 			userModel,
-			rawEventModel,
+			adminEventModel,
 		}),
 	);
 	router.get("/audit-logs/security-events", (req, res, next) =>
 		auditlogsController.getSecurityEvents(req, res, next, {
 			userModel,
-			rawEventModel,
+			adminEventModel,
 		}),
 	);
 

@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { standardResponse } from "../../../utils/apiResponse.utils.js";
 import { AppError } from "../../../types/errors.interface.js";
 import type { UserStaticMethods } from "../../../types/mongoModels/user.type.js";
+import type { AdminRole } from "../models/adminEvent.type.js";
 
 // ─── Hard window cap for raw_events queries ───────────────────────────────────
 // Per-dimension site-admin routes (route/error/latency breakdowns) keep reading
@@ -26,8 +27,12 @@ export function applyHardWindowCap(from?: Date, to?: Date): void {
 	}
 }
 
-type RequestWithUser = Request & { userID?: string };
-type AdminRole = "admin" | "moderator";
+type RequestWithUser = Request & {
+	userID?: string;
+	// Set by the admin metrics collector? No — set here by resolveAdminUser.
+	// adminMetricsCollector reads it to stamp the event with the acting role.
+	_adminRole?: AdminRole;
+};
 
 export type ResolvedAdmin = {
 	userId: string;
@@ -67,6 +72,10 @@ export async function resolveAdminUser(
 		res.status(403).json(standardResponse(false, "Forbidden: insufficient permissions", null));
 		return null;
 	}
+
+	// Stamp the resolved role onto the request so the admin metrics collector
+	// (running last, per-router) can write it into the admin event.
+	req._adminRole = role;
 
 	return { userId, role };
 }
