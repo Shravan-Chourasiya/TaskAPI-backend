@@ -49,7 +49,7 @@ export type UserType = {
 	is2FAEnabled: boolean;
 	twoFASecret: string;
 	pending2FASecret: string | null;
-	twoFA_Options: "email" | "sms" | "authenticator" | "none";
+	twoFA_Options: ("email" | "sms" | "authenticator" | "none")[];
 	isBlackListed: boolean;
 	blackListReason: string;
 	blackListedAt: Date;

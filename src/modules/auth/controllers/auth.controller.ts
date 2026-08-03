@@ -985,7 +985,6 @@ export const enable2FAController = async (
 ) => {
 	try {
 		const id = req.userID;
-		console.log("############1: User ID received in enable2FAController", id);
 		if (!id) {
 			return res
 				.status(400)
@@ -998,7 +997,6 @@ export const enable2FAController = async (
 				.status(404)
 				.json(standardResponse(false, "User Not Found", null));
 		}
-		console.log("############2: User found in enable2FAController", user);
 		const email = user.email;
 		const twoFaQrData = await generateTOTPSecret(email);
 		if (!twoFaQrData) {
@@ -1011,10 +1009,6 @@ export const enable2FAController = async (
 					),
 				);
 		}
-		console.log(
-			"############3: QR Data generated in enable2FAController",
-			twoFaQrData,
-		);
 		user.pending2FASecret = twoFaQrData.base32;
 		await user.save();
 		res.status(201).json(
@@ -1142,7 +1136,7 @@ export async function disable2FAController(
 
 		user.twoFASecret = "";
 		user.is2FAEnabled = false;
-		user.twoFA_Options = "none";
+		user.twoFA_Options = ["none"];
 		await user.save();
 
 		res.status(200).json(standardResponse(true, "2FA Disabled Successfully!"));
@@ -1181,8 +1175,6 @@ export const confirm2FAController = async (
 				.status(404)
 				.json(standardResponse(false, "User Not Found", null));
 		}
-		console.log(user);
-		console.log(user.pending2FASecret, "############# pending 2FA secret");
 		if (!user.pending2FASecret) {
 			return res
 				.status(400)
@@ -1200,7 +1192,7 @@ export const confirm2FAController = async (
 		user.twoFASecret = user.pending2FASecret;
 		user.pending2FASecret = null;
 		user.is2FAEnabled = true;
-		user.twoFA_Options = "authenticator";
+		user.twoFA_Options = ["authenticator"];
 		await user.save();
 
 		res.status(200).json(standardResponse(true, "2FA enabled successfully."));
