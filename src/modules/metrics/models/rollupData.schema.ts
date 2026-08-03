@@ -7,6 +7,7 @@ function createRollupSchema(): Schema<IRollupBucket> {
 	const schema = new Schema<IRollupBucket>(
 		{
 			apiKeyId: { type: Schema.Types.ObjectId, required: true, index: false },
+			ownerId: { type: String, required: true },
 			bucketStart: { type: Date, required: true },
 			granularity: { type: String, required: true },
 
@@ -27,9 +28,14 @@ function createRollupSchema(): Schema<IRollupBucket> {
 	// --- INDEX 1: primary query + uniqueness index ---
 	// ESR rule (Equality, Sort, Range): apiKeyId is equality-filtered on every
 	// dashboard read, bucketStart is both the sort key AND the range filter.
+	// ownerId completes the upsert dedup key (site-admin traffic-by-user).
 	// This single compound index covers: upsert dedup, range queries, and
 	// sorted results — no in-memory sort stage needed.
-	schema.index({ apiKeyId: 1, bucketStart: 1 }, { unique: true });
+	schema.index({ apiKeyId: 1, ownerId: 1, bucketStart: 1 }, { unique: true });
+
+	// --- INDEX 1b: ownerId lookups (traffic-by-user) ---
+	// Equality on ownerId, range on bucketStart — cross-key site-admin queries.
+	schema.index({ ownerId: 1, bucketStart: 1 });
 
 	// --- INDEX 2: TTL index ---
 	// Must be a single-field index — TTL doesn't work on compound indexes.

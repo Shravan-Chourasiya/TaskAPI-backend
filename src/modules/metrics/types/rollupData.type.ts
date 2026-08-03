@@ -4,6 +4,7 @@ export type RollupGranularity = "5m" | "1h" | "1d";
 
 export interface IRollupBucket {
 	apiKeyId: mongoose.Types.ObjectId; // reference to the API key, not the raw key
+	ownerId: string; // userId of the apiKey owner — cross-key traffic-by-user
 	bucketStart: Date; // start of this time bucket (UTC, aligned)
 	granularity: RollupGranularity;
 

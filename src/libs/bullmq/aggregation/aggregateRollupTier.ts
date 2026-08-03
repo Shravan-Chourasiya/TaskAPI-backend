@@ -18,6 +18,7 @@ export async function aggregateRollupTier(
 
 	const grouped = new Map<string, {
 		apiKeyId: any;
+		ownerId: string;
 		bucketStart: Date;
 		successCount: number;
 		errorCount: number;
@@ -29,11 +30,12 @@ export async function aggregateRollupTier(
 
 	for (const b of sourceBuckets) {
 		const bucketStart = alignToBucket(b.bucketStart, targetGranularity);
-		const key = `${b.apiKeyId}_${bucketStart.getTime()}`;
+		const key = `${b.apiKeyId}_${b.ownerId}_${bucketStart.getTime()}`;
 
 		if (!grouped.has(key)) {
 			grouped.set(key, {
 				apiKeyId: b.apiKeyId,
+				ownerId: b.ownerId,
 				bucketStart,
 				successCount: 0,
 				errorCount: 0,
@@ -69,6 +71,7 @@ export async function aggregateRollupTier(
 				$max: { maxDuration: g.maxDuration },
 				$setOnInsert: {
 					granularity: targetGranularity,
+					ownerId: g.ownerId,
 					expiresAt: new Date(g.bucketStart.getTime() + retentionMs),
 				},
 			},
