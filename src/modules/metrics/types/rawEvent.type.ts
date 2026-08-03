@@ -3,7 +3,9 @@ import type { Document, Model } from "mongoose";
 // ─── Status class ─────────────────────────────────────────────────────────────
 // Derived from HTTP status code at capture time; stored explicitly so
 // aggregation pipelines can filter by class without arithmetic on statusCode.
-export type StatusClass = "2xx" | "3xx" | "4xx" | "5xx";
+// "aborted" is a pseudo-class: the client cancelled the request mid-flight so
+// res never emitted "finish"; there is no HTTP status code to bucket it under.
+export type StatusClass = "2xx" | "3xx" | "4xx" | "5xx" | "aborted";
 
 // ─── Raw event document ───────────────────────────────────────────────────────
 // One document = one completed HTTP request that passed API key auth.

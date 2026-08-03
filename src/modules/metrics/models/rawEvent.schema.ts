@@ -34,7 +34,7 @@ const rawEventSchema = new mongoose.Schema<RawEventDocument>(
 		statusClass: {
 			type: String,
 			required: true,
-			enum: ["2xx", "3xx", "4xx", "5xx"],
+			enum: ["2xx", "3xx", "4xx", "5xx", "aborted"],
 		},
 
 		// ── Measure ──────────────────────────────────────────────────────────
