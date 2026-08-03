@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import multer from "multer";
-import type { AppError } from "../types/errors.interface.js";
+import type { ErrorRequestHandler } from "express";
+import { AppError } from "../types/errors.interface.js";
 
 interface ClassErrReturnType {
 	status: number;
@@ -77,7 +78,20 @@ export function classifyError(err: unknown): ClassErrReturnType {
 	if (error.name === "ValidationError") {
 		return { status: 400, message: "Validation failed", errSrc: "mongoose" };
 	}
-	if (error.name === "MongoError") {
+	if (
+		error.name === "MongoError" ||
+		error.name === "MongoServerError" ||
+		error.name === "MongoBulkWriteError"
+	) {
+		// Duplicate key (E11000) on unique index — e.g. email/username races.
+		const mongoError = error as unknown as { code?: number };
+		if (mongoError.code === 11000) {
+			return {
+				status: 409,
+				message: "Duplicate value for a unique field",
+				errSrc: "mongoose:duplicate-key",
+			};
+		}
 		return { status: 500, message: "Database error", errSrc: "mongoose" };
 	}
 
@@ -91,5 +105,41 @@ export function classifyError(err: unknown): ClassErrReturnType {
 	}
 
 	// Catch-all
-	return { status: 500, message: "Internal server error", errSrc: "unknown" };
+	return { status: 500, message: "Internal server error", errSrc: "INTERNAL_ERROR" };
 }
+
+/**
+ * Centralized Express error middleware. Sends the response for any error
+ * routed here via next(err) (from asyncErrorHandler or direct throw in sync
+ * middleware) and stamps the machine-readable error code onto res.locals so
+ * the metrics collector can persist it into the raw event's `error` field.
+ *
+ * `code` is the AppError.code when present, otherwise the classifyError
+ * errSrc for known errors, otherwise a generic INTERNAL_ERROR.
+ *
+ * Must be registered AFTER all routes — Express skips it otherwise.
+ */
+export const errorHandler: ErrorRequestHandler = (
+	err,
+	_req,
+	res,
+	_next,
+): void => {
+	const { status, message, errSrc } = classifyError(err);
+	res.locals.errorCode = AppError.isAppError(err) ? err.code : errSrc;
+
+	// Log server errors
+	if (status >= 500) {
+		console.error(`[${errSrc}] Server error:`, err);
+		// TODO: Replace with proper logging mechanism (Winston, Pino, etc.)
+	}
+
+	// Only send if headers not already sent — protects the finish/close flow.
+	if (!res.headersSent) {
+		res.status(status).json({
+			success: false,
+			error: errSrc,
+			message,
+		});
+	}
+};
