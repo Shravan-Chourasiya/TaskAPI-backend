@@ -1,6 +1,6 @@
 import type { Request, NextFunction, Response } from "express";
 import type { UserStaticMethods } from "../../../types/mongoModels/user.type.js";
-import type { RawEventModel } from "../../metrics/types/rawEvent.type.js";
+import type { RawAdminEventModel } from "../models/adminEvent.type.js";
 import { standardResponse } from "../../../utils/apiResponse.utils.js";
 import { resolveAdminUser, isAdmin } from "../utils/siteAdminController.utils.js";
 
@@ -8,7 +8,7 @@ type RequestWithUser = Request & { userID?: string };
 
 type Deps = {
 	userModel: UserStaticMethods;
-	rawEventModel: RawEventModel;
+	adminEventModel: RawAdminEventModel;
 };
 
 // Record-level audit logs paginate with an ISO timestamp cursor: docs are
@@ -34,7 +34,7 @@ export async function getAdminAuditLogs(
 	req: RequestWithUser,
 	res: Response,
 	next: NextFunction,
-	{ userModel, rawEventModel }: Deps,
+	{ userModel, adminEventModel }: Deps,
 ) {
 	try {
 		const admin = await resolveAdminUser(req, res, userModel);
@@ -46,8 +46,12 @@ export async function getAdminAuditLogs(
 		}
 
 		const { match, limit } = auditQuery(req);
-		const logs = await rawEventModel
-			.find({ route: { $regex: /^\/site-admin/ }, ...match })
+		// The collector stores the full path incl. the BASE_URL mount prefix
+		// (baseUrl + path), e.g. "/api/v1/site-admin/users/get-all". Only admin
+		// events land in this collection, so the route filter is a safety net
+		// rather than the primary discriminator.
+		const logs = await adminEventModel
+			.find({ route: { $regex: /\/site-admin/ }, ...match })
 			.sort({ timestamp: -1 })
 			.limit(limit)
 			.lean();
@@ -64,7 +68,7 @@ export async function getUserActivityLogs(
 	req: RequestWithUser,
 	res: Response,
 	next: NextFunction,
-	{ userModel, rawEventModel }: Deps,
+	{ userModel, adminEventModel }: Deps,
 ) {
 	try {
 		const admin = await resolveAdminUser(req, res, userModel);
@@ -78,8 +82,8 @@ export async function getUserActivityLogs(
 		}
 
 		const { match, limit } = auditQuery(req);
-		const logs = await rawEventModel
-			.find({ ownerId: userId, ...match })
+		const logs = await adminEventModel
+			.find({ adminId: userId, ...match })
 			.sort({ timestamp: -1 })
 			.limit(limit)
 			.lean();
@@ -96,14 +100,14 @@ export async function getErrorLogs(
 	req: RequestWithUser,
 	res: Response,
 	next: NextFunction,
-	{ userModel, rawEventModel }: Deps,
+	{ userModel, adminEventModel }: Deps,
 ) {
 	try {
 		const admin = await resolveAdminUser(req, res, userModel);
 		if (!admin) return;
 
 		const { match, limit } = auditQuery(req);
-		const logs = await rawEventModel
+		const logs = await adminEventModel
 			.find({ statusClass: { $in: ["4xx", "5xx"] }, ...match })
 			.sort({ timestamp: -1 })
 			.limit(limit)
@@ -121,14 +125,14 @@ export async function getSecurityEvents(
 	req: RequestWithUser,
 	res: Response,
 	next: NextFunction,
-	{ userModel, rawEventModel }: Deps,
+	{ userModel, adminEventModel }: Deps,
 ) {
 	try {
 		const admin = await resolveAdminUser(req, res, userModel);
 		if (!admin) return;
 
 		const { match, limit } = auditQuery(req);
-		const events = await rawEventModel
+		const events = await adminEventModel
 			.find({
 				$or: [
 					{ httpStatusCode: 401 },

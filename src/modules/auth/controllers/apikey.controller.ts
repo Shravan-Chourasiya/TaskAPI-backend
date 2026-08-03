@@ -220,6 +220,9 @@ export const updateApiKeyController = async (
 	try {
 		const { keyId } = req.params;
 		const { keyUpdatesDetails }: z.infer<typeof updateApiKeySchema> = req.body;
+		// Note: keyId above comes from the URL (:keyId), NOT the body — no
+		// collision with the body alias destructure further down.
+		const keyIdStr: string = String(keyId);
 		if (!keyId || !keyUpdatesDetails) {
 			return res
 				.status(400)
@@ -227,7 +230,7 @@ export const updateApiKeyController = async (
 					standardResponse(false, "keyId and keyUpdatesDetails are required"),
 				);
 		}
-		if (!mongoose.Types.ObjectId.isValid(keyId)) {
+		if (!mongoose.Types.ObjectId.isValid(keyIdStr)) {
 			return res
 				.status(400)
 				.json(standardResponse(false, "Invalid keyId format"));

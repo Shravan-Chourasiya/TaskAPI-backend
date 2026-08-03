@@ -59,7 +59,7 @@ export const isUserController = async (
 				username: user.username,
 				email: user.email,
 				status: user.status,
-				role: user.roles,
+				role: user.role,
 				profile: user.profile,
 				phone: user.phone,
 			};
@@ -71,7 +71,7 @@ export const isUserController = async (
 				username: user.username,
 				email: user.email,
 				status: user.status,
-				role: user.roles,
+				role: user.role,
 				profile: user.profile,
 			};
 			return res
