@@ -9,3 +9,4 @@ session*.md
 dbresetScript.ts
 dist/*
 scripts/
+metrics-pipeline-guide.md
