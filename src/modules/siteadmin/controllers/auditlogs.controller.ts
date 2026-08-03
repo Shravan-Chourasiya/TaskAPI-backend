@@ -11,6 +11,25 @@ type Deps = {
 	rawEventModel: RawEventModel;
 };
 
+// Record-level audit logs paginate with an ISO timestamp cursor: docs are
+// sorted timestamp desc, so pass the last seen document's timestamp as
+// ?cursor= to fetch the next page. limit is hard-capped at 1000.
+function auditQuery(req: Request): { match: Record<string, unknown>; limit: number } {
+	const { from, to, cursor, limit = "100" } = req.query;
+	const cap = Math.min(parseInt(limit as string, 10) || 100, 1000);
+
+	const match: Record<string, unknown> = {};
+	if (from || to || cursor) {
+		const ts: Record<string, Date> = {};
+		if (cursor) ts.$lt = new Date(cursor as string);
+		if (from) ts.$gte = new Date(from as string);
+		if (to) ts.$lte = new Date(to as string);
+		match.timestamp = ts;
+	}
+
+	return { match, limit: cap };
+}
+
 export async function getAdminAuditLogs(
 	req: RequestWithUser,
 	res: Response,
@@ -26,21 +45,11 @@ export async function getAdminAuditLogs(
 				.json(standardResponse(false, "Only admins can view audit logs", null));
 		}
 
-		const { from, to, limit = "100" } = req.query;
-		const match: Record<string, unknown> = {
-			route: { $regex: /^\/site-admin/ },
-		};
-		if (from || to) {
-			match.timestamp = {
-				...(from ? { $gte: new Date(from as string) } : {}),
-				...(to ? { $lte: new Date(to as string) } : {}),
-			};
-		}
-
+		const { match, limit } = auditQuery(req);
 		const logs = await rawEventModel
-			.find(match)
+			.find({ route: { $regex: /^\/site-admin/ }, ...match })
 			.sort({ timestamp: -1 })
-			.limit(parseInt(limit as string, 10))
+			.limit(limit)
 			.lean();
 
 		return res
@@ -68,19 +77,11 @@ export async function getUserActivityLogs(
 				.json(standardResponse(false, "Missing userId", null));
 		}
 
-		const { from, to, limit = "100" } = req.query;
-		const match: Record<string, unknown> = { ownerId: userId };
-		if (from || to) {
-			match.timestamp = {
-				...(from ? { $gte: new Date(from as string) } : {}),
-				...(to ? { $lte: new Date(to as string) } : {}),
-			};
-		}
-
+		const { match, limit } = auditQuery(req);
 		const logs = await rawEventModel
-			.find(match)
+			.find({ ownerId: userId, ...match })
 			.sort({ timestamp: -1 })
-			.limit(parseInt(limit as string, 10))
+			.limit(limit)
 			.lean();
 
 		return res
@@ -101,21 +102,11 @@ export async function getErrorLogs(
 		const admin = await resolveAdminUser(req, res, userModel);
 		if (!admin) return;
 
-		const { from, to, limit = "100" } = req.query;
-		const match: Record<string, unknown> = {
-			statusClass: { $in: ["4xx", "5xx"] },
-		};
-		if (from || to) {
-			match.timestamp = {
-				...(from ? { $gte: new Date(from as string) } : {}),
-				...(to ? { $lte: new Date(to as string) } : {}),
-			};
-		}
-
+		const { match, limit } = auditQuery(req);
 		const logs = await rawEventModel
-			.find(match)
+			.find({ statusClass: { $in: ["4xx", "5xx"] }, ...match })
 			.sort({ timestamp: -1 })
-			.limit(parseInt(limit as string, 10))
+			.limit(limit)
 			.lean();
 
 		return res
@@ -136,25 +127,18 @@ export async function getSecurityEvents(
 		const admin = await resolveAdminUser(req, res, userModel);
 		if (!admin) return;
 
-		const { from, to, limit = "100" } = req.query;
-		const match: Record<string, unknown> = {
-			$or: [
-				{ httpStatusCode: 401 },
-				{ httpStatusCode: 403 },
-				{ error: { $in: ["INVALID_TOKEN", "TOKEN_EXPIRED", "BLACKLISTED", "REVOKED_KEY"] } },
-			],
-		};
-		if (from || to) {
-			match.timestamp = {
-				...(from ? { $gte: new Date(from as string) } : {}),
-				...(to ? { $lte: new Date(to as string) } : {}),
-			};
-		}
-
+		const { match, limit } = auditQuery(req);
 		const events = await rawEventModel
-			.find(match)
+			.find({
+				$or: [
+					{ httpStatusCode: 401 },
+					{ httpStatusCode: 403 },
+					{ error: { $in: ["INVALID_TOKEN", "TOKEN_EXPIRED", "BLACKLISTED", "REVOKED_KEY"] } },
+				],
+				...match,
+			})
 			.sort({ timestamp: -1 })
-			.limit(parseInt(limit as string, 10))
+			.limit(limit)
 			.lean();
 
 		return res
