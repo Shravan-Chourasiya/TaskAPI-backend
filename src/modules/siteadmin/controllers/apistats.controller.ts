@@ -1,52 +1,56 @@
 import type { Request, NextFunction, Response } from "express";
+import { Model } from "mongoose";
 import type { UserStaticMethods } from "../../../types/mongoModels/user.type.js";
 import type { RawEventModel } from "../../metrics/types/rawEvent.type.js";
+import type { IRollupBucket } from "../../metrics/types/rollupData.type.js";
 import { standardResponse } from "../../../utils/apiResponse.utils.js";
-import { resolveAdminUser } from "../utils/siteAdminController.utils.js";
+import { resolveAdminUser, applyHardWindowCap } from "../utils/siteAdminController.utils.js";
+import {
+	selectRollupTier,
+	aggregateBucketsSiteWide,
+} from "../../../utils/rollupAggregations.js";
 
 type RequestWithUser = Request & { userID?: string };
 
 type Deps = {
 	userModel: UserStaticMethods;
 	rawEventModel: RawEventModel;
+	Rollup5m: Model<IRollupBucket>;
+	Rollup1h: Model<IRollupBucket>;
+	Rollup1d: Model<IRollupBucket>;
 };
+
+// Per-dimension (route/error) analytics stay on raw_events, hard-capped to 7
+// days so a wide window can't turn into a full raw scan. Default: last 24h.
+function rawWindow(req: Request): { from: Date; to: Date } {
+	const { from, to } = req.query;
+	const end = to ? new Date(to as string) : new Date();
+	const start = from ? new Date(from as string) : new Date(end.getTime() - 24 * 60 * 60 * 1000);
+	applyHardWindowCap(start, end);
+	return { from: start, to: end };
+}
 
 export async function getApiUsageStats(
 	req: RequestWithUser,
 	res: Response,
 	next: NextFunction,
-	{ userModel, rawEventModel }: Deps,
+	{ userModel, Rollup5m, Rollup1h, Rollup1d }: Deps,
 ) {
 	try {
 		const admin = await resolveAdminUser(req, res, userModel);
 		if (!admin) return;
 
-		const { from, to } = req.query;
-		const match: Record<string, unknown> = {};
-		if (from || to) {
-			match.timestamp = {
-				...(from ? { $gte: new Date(from as string) } : {}),
-				...(to ? { $lte: new Date(to as string) } : {}),
-			};
-		}
+		const { from: rawFrom, to: rawTo } = req.query;
+		const end = rawTo ? new Date(rawTo as string) : new Date();
+		const start = rawFrom ? new Date(rawFrom as string) : new Date(end.getTime() - 24 * 60 * 60 * 1000);
+		applyHardWindowCap(start, end);
 
-		const stats = await rawEventModel.aggregate([
-			{ $match: match },
-			{
-				$group: {
-					_id: "$apiKeyId",
-					totalRequests: { $sum: 1 },
-					successCount: { $sum: { $cond: [{ $eq: ["$statusClass", "2xx"] }, 1, 0] } },
-					errorCount: { $sum: { $cond: [{ $in: ["$statusClass", ["4xx", "5xx"]] }, 1, 0] } },
-					avgDurationMs: { $avg: "$durationMs" },
-				},
-			},
-			{ $sort: { totalRequests: -1 } },
-		]);
+		const { tier, model } = selectRollupTier(start, end, { Rollup5m, Rollup1h, Rollup1d });
+		const stats = await aggregateBucketsSiteWide(model, start, end);
 
-		return res
-			.status(200)
-			.json(standardResponse(true, "API usage stats fetched", stats));
+		return res.status(200).json(
+			standardResponse(true, "API usage stats fetched", { tier, buckets: stats }),
+		);
 	} catch (err) {
 		next(err);
 	}
@@ -62,14 +66,10 @@ export async function getApiLatencyStats(
 		const admin = await resolveAdminUser(req, res, userModel);
 		if (!admin) return;
 
-		const { from, to } = req.query;
-		const match: Record<string, unknown> = {};
-		if (from || to) {
-			match.timestamp = {
-				...(from ? { $gte: new Date(from as string) } : {}),
-				...(to ? { $lte: new Date(to as string) } : {}),
-			};
-		}
+		const { from, to } = rawWindow(req);
+		const match: Record<string, unknown> = {
+			timestamp: { $gte: from, $lte: to },
+		};
 
 		const stats = await rawEventModel.aggregate([
 			{ $match: match },
@@ -85,9 +85,7 @@ export async function getApiLatencyStats(
 			{ $sort: { avgDurationMs: -1 } },
 		]);
 
-		return res
-			.status(200)
-			.json(standardResponse(true, "API latency stats fetched", stats));
+		return res.status(200).json(standardResponse(true, "API latency stats fetched", stats));
 	} catch (err) {
 		next(err);
 	}
@@ -103,16 +101,11 @@ export async function getApiErrorStats(
 		const admin = await resolveAdminUser(req, res, userModel);
 		if (!admin) return;
 
-		const { from, to } = req.query;
+		const { from, to } = rawWindow(req);
 		const match: Record<string, unknown> = {
 			statusClass: { $in: ["4xx", "5xx"] },
+			timestamp: { $gte: from, $lte: to },
 		};
-		if (from || to) {
-			match.timestamp = {
-				...(from ? { $gte: new Date(from as string) } : {}),
-				...(to ? { $lte: new Date(to as string) } : {}),
-			};
-		}
 
 		const stats = await rawEventModel.aggregate([
 			{ $match: match },
@@ -125,9 +118,7 @@ export async function getApiErrorStats(
 			{ $sort: { count: -1 } },
 		]);
 
-		return res
-			.status(200)
-			.json(standardResponse(true, "API error stats fetched", stats));
+		return res.status(200).json(standardResponse(true, "API error stats fetched", stats));
 	} catch (err) {
 		next(err);
 	}
@@ -145,19 +136,14 @@ export async function getApiTrafficByUser(
 
 		const { userId } = req.params;
 		if (!userId) {
-			return res
-				.status(400)
-				.json(standardResponse(false, "Missing userId", null));
+			return res.status(400).json(standardResponse(false, "Missing userId", null));
 		}
 
-		const { from, to } = req.query;
-		const match: Record<string, unknown> = { ownerId: userId };
-		if (from || to) {
-			match.timestamp = {
-				...(from ? { $gte: new Date(from as string) } : {}),
-				...(to ? { $lte: new Date(to as string) } : {}),
-			};
-		}
+		const { from, to } = rawWindow(req);
+		const match: Record<string, unknown> = {
+			ownerId: userId,
+			timestamp: { $gte: from, $lte: to },
+		};
 
 		const stats = await rawEventModel.aggregate([
 			{ $match: match },
@@ -172,9 +158,7 @@ export async function getApiTrafficByUser(
 			{ $sort: { totalRequests: -1 } },
 		]);
 
-		return res
-			.status(200)
-			.json(standardResponse(true, "API traffic by user fetched", stats));
+		return res.status(200).json(standardResponse(true, "API traffic by user fetched", stats));
 	} catch (err) {
 		next(err);
 	}

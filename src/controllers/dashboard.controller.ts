@@ -8,29 +8,17 @@ import { ApiKeyStaticMethods } from "../types/mongoModels/apikeys.type.js";
 import { ClientUserStaticMethods } from "../modules/clientauth/types/userMongo.type.js";
 import {
 	IRollupBucket,
-	RollupGranularity,
 } from "../modules/metrics/types/rollupData.type.js";
+import {
+	selectRollupTier,
+	aggregateBucketsByApiKeys,
+} from "../utils/rollupAggregations.js";
 
 type RollupModels = {
 	Rollup5m: Model<IRollupBucket>;
 	Rollup1h: Model<IRollupBucket>;
 	Rollup1d: Model<IRollupBucket>;
 };
-
-// ── Shared tier-selection (duration-based only) ───────────────────────────────
-function selectRollupTier(
-	from: Date,
-	to: Date,
-	models: RollupModels,
-): { tier: RollupGranularity; model: Model<IRollupBucket> } {
-	const durationMs = to.getTime() - from.getTime();
-	const TWO_HOURS = 2 * 60 * 60 * 1000;
-	const TWO_DAYS = 2 * 24 * 60 * 60 * 1000;
-
-	if (durationMs <= TWO_HOURS) return { tier: "5m", model: models.Rollup5m };
-	if (durationMs <= TWO_DAYS) return { tier: "1h", model: models.Rollup1h };
-	return { tier: "1d", model: models.Rollup1d };
-}
 
 // ── Shared auth helper ────────────────────────────────────────────────────────
 async function resolveUser(
@@ -151,35 +139,14 @@ export async function getAllApiMetricsController(
 			Rollup1d,
 		});
 		console.log("Selected rollup tier:", tier);
-		const buckets = await model
-			.find({
-				apiKeyId: { $in: apiKeyIds },
-				bucketStart: { $gte: from, $lt: to },
-			})
-			.sort({ bucketStart: 1 })
-			.lean();
-
-		// Merge buckets across keys per bucketStart
-		const merged = new Map<string, IRollupBucket>();
-		for (const b of buckets) {
-			const key = b.bucketStart.toISOString();
-			if (!merged.has(key)) {
-				merged.set(key, { ...b });
-			} else {
-				const acc = merged.get(key)!;
-				acc.successCount += b.successCount;
-				acc.errorCount += b.errorCount;
-				acc.successDurationSum += b.successDurationSum;
-				acc.errorDurationSum += b.errorDurationSum;
-				acc.minDuration = Math.min(acc.minDuration, b.minDuration);
-				acc.maxDuration = Math.max(acc.maxDuration, b.maxDuration);
-			}
-		}
-		console.log("Merged buckets count:", merged.size);
+		// Single aggregation across the owner's keys, grouped per bucketStart.
+		// Bounds response size to the bucket count, independent of key count.
+		const buckets = await aggregateBucketsByApiKeys(model, from, to, apiKeyIds);
+		console.log("Aggregated buckets:", buckets.length);
 		return res.status(200).json(
 			standardResponse(true, "Metrics fetched successfully.", {
 				tier,
-				buckets: Array.from(merged.values()),
+				buckets,
 			}),
 		);
 	} catch (err) {

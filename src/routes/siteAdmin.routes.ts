@@ -1,4 +1,5 @@
 import express from "express";
+import { Model } from "mongoose";
 import type { UserStaticMethods } from "../types/mongoModels/user.type.js";
 import type { ApiKeyStaticMethods } from "../types/mongoModels/apikeys.type.js";
 import type { SubscriptionStaticMethods } from "../types/mongoModels/subscription.type.js";
@@ -18,6 +19,7 @@ import * as metricsController from "../modules/siteadmin/controllers/metrics.con
 import * as auditlogsController from "../modules/siteadmin/controllers/auditlogs.controller.js";
 import * as apistatsController from "../modules/siteadmin/controllers/apistats.controller.js";
 import { RawEventModel } from "../modules/metrics/types/rawEvent.type.js";
+import { IRollupBucket } from "../modules/metrics/types/rollupData.type.js";
 
 export function createSiteAdminRouter({
 	userModel,
@@ -25,12 +27,18 @@ export function createSiteAdminRouter({
 	subscriptionModel,
 	sessionModel,
 	rawEventModel,
+	Rollup5m,
+	Rollup1h,
+	Rollup1d,
 }: {
 	userModel: UserStaticMethods;
 	apiKeyModel: ApiKeyStaticMethods;
 	subscriptionModel: SubscriptionStaticMethods;
 	sessionModel: SessionStaticMethods;
 	rawEventModel: RawEventModel;
+	Rollup5m: Model<IRollupBucket>;
+	Rollup1h: Model<IRollupBucket>;
+	Rollup1d: Model<IRollupBucket>;
 }): express.Router {
 	const router = express.Router();
 
@@ -205,67 +213,53 @@ export function createSiteAdminRouter({
 	);
 
 	// ── Metrics API routes ─────────────────────────────────────────
+	const metricsDeps = {
+		userModel,
+		rawEventModel,
+		Rollup5m,
+		Rollup1h,
+		Rollup1d,
+	};
+
 	router.get("/metrics/user-growth", (req, res, next) =>
-		metricsController.getUserGrowthMetrics(req, res, next, {
-			userModel,
-			rawEventModel,
-		}),
+		metricsController.getUserGrowthMetrics(req, res, next, metricsDeps),
 	);
 	router.get("/metrics/engagement", (req, res, next) =>
-		metricsController.getEngagementMetrics(req, res, next, {
-			userModel,
-			rawEventModel,
-		}),
+		metricsController.getEngagementMetrics(req, res, next, metricsDeps),
 	);
 	router.get("/metrics/feature-usage", (req, res, next) =>
-		metricsController.getFeatureUsageStats(req, res, next, {
-			userModel,
-			rawEventModel,
-		}),
+		metricsController.getFeatureUsageStats(req, res, next, metricsDeps),
 	);
 	router.get("/metrics/subscription-trends", (req, res, next) =>
-		metricsController.getSubscriptionTrends(req, res, next, {
-			userModel,
-			rawEventModel,
-		}),
+		metricsController.getSubscriptionTrends(req, res, next, metricsDeps),
 	);
 	router.get("/metrics/export", (req, res, next) =>
-		metricsController.exportMetrics(req, res, next, {
-			userModel,
-			rawEventModel,
-		}),
+		metricsController.exportMetrics(req, res, next, metricsDeps),
 	);
 	router.get("/metrics/report", (req, res, next) =>
-		metricsController.generateReport(req, res, next, {
-			userModel,
-			rawEventModel,
-		}),
+		metricsController.generateReport(req, res, next, metricsDeps),
 	);
 
 	// ── API Statistics API routes ─────────────────────────────────────────
+	const apiStatsDeps = {
+		userModel,
+		rawEventModel,
+		Rollup5m,
+		Rollup1h,
+		Rollup1d,
+	};
+
 	router.get("/api-stats/usage", (req, res, next) =>
-		apistatsController.getApiUsageStats(req, res, next, {
-			userModel,
-			rawEventModel,
-		}),
+		apistatsController.getApiUsageStats(req, res, next, apiStatsDeps),
 	);
 	router.get("/api-stats/latency", (req, res, next) =>
-		apistatsController.getApiLatencyStats(req, res, next, {
-			userModel,
-			rawEventModel,
-		}),
+		apistatsController.getApiLatencyStats(req, res, next, apiStatsDeps),
 	);
 	router.get("/api-stats/errors", (req, res, next) =>
-		apistatsController.getApiErrorStats(req, res, next, {
-			userModel,
-			rawEventModel,
-		}),
+		apistatsController.getApiErrorStats(req, res, next, apiStatsDeps),
 	);
 	router.get("/api-stats/traffic/:userId", (req, res, next) =>
-		apistatsController.getApiTrafficByUser(req, res, next, {
-			userModel,
-			rawEventModel,
-		}),
+		apistatsController.getApiTrafficByUser(req, res, next, apiStatsDeps),
 	);
 
 	// ── Audit Logs API routes ─────────────────────────────────────────
