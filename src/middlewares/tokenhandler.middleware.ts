@@ -202,6 +202,48 @@ export const refreshTokenHandlerFunction = async (
 };
 
 /**
+ * Session presence check via refresh token cookie.
+ * Use when a valid browser session is required but full token-rotation
+ * security (bcrypt, family check) is not needed — e.g. client-admin routes.
+ *
+ * Cost: 1 JWT verify (CPU) + 1 indexed DB read. No bcrypt, no writes.
+ */
+export const sessionGuardHandlerFunction = async (
+	req: RequestWithUser,
+	res: Response,
+	next: NextFunction,
+	sessionModel: SessionStaticMethods,
+) => {
+	const refreshToken = req.cookies.rfToken;
+	if (!refreshToken) {
+		return res.status(401).json(
+			tokenMiddlewareResponse(false, "No active session", "Unauthorized", true),
+		);
+	}
+
+	const decoded = jwt.verify(
+		refreshToken,
+		config.REFRESH_TOKEN_JWT_SECRET,
+	) as JwtPayload;
+
+	const session: SessionDocument | null = await sessionModel.findOne({
+		userId: decoded.id,
+		status: "active",
+		isRevoked: false,
+	}, "_id");
+
+	if (!session) {
+		return res.status(401).json(
+			tokenMiddlewareResponse(false, "Session expired or revoked", "SessionInvalid", true),
+		);
+	}
+
+	req.userID = decoded.id;
+	req.sessionId = session._id.toString();
+	next();
+};
+
+/**
  * Strict middleware that checks both access token AND session validity
  * Use for sensitive operations (delete account, change password, etc.)
  */

@@ -4,7 +4,7 @@ import { ApiKeyStaticMethods } from "../types/mongoModels/apikeys.type.js";
 import { SessionStaticMethods } from "../types/mongoModels/session.type.js";
 import * as clientAdminControllers from "../modules/clientauth/controllers/clientAdmin.controller.js";
 import { apikeyHandlerFunction } from "../middlewares/apikeyhandler.middleware.js";
-import { strictAuthHandlerFunction } from "../middlewares/tokenhandler.middleware.js";
+import { sessionGuardHandlerFunction } from "../middlewares/tokenhandler.middleware.js";
 import { resolveIP } from "../middlewares/ipResolver.middleware.js";
 import { resolveScopes } from "../middlewares/scopeResolver.middleware.js";
 import { createMiddlewareWrapper } from "../utils/middlewareWrapper.js";
@@ -28,9 +28,9 @@ export function createClientAdminRouter({
 		asyncErrorHandler,
 	);
 
-	const strictAuthHandler = createMiddlewareWrapper(
+	const sessionGuard = createMiddlewareWrapper(
 		sessionModel,
-		strictAuthHandlerFunction,
+		sessionGuardHandlerFunction,
 		asyncErrorHandler,
 	);
 
@@ -46,7 +46,7 @@ export function createClientAdminRouter({
 		asyncErrorHandler,
 	);
 
-	router.use(apikeyHandler, ipResolver, scopeResolver, clientApiRateLimiter, strictAuthHandler);
+	router.use(apikeyHandler, ipResolver, scopeResolver, clientApiRateLimiter, sessionGuard);
 
 	router.get("/users", (req, res, next) =>
 		clientAdminControllers.getAllUsersList(req, res, next, clientUserModel),
