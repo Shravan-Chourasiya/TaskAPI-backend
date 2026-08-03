@@ -18,6 +18,8 @@ import { initSubscriptionModel } from "./modules/auth/models/subscription.schema
 import { initClientUserModel } from "./modules/clientauth/schemas/userMongo.schema.js";
 import { initRawEventModel } from "./modules/metrics/models/rawEvent.schema.js";
 import { createMetricsMiddleware } from "./middlewares/metricsCollector.middleware.js";
+import { createAdminMetricsMiddleware } from "./middlewares/adminMetricsCollector.middleware.js";
+import { initAdminEventModel } from "./modules/siteadmin/models/adminEvent.schema.js";
 import { createCsrfMiddleware } from "./middlewares/csrf.middleware.js";
 import { errorHandler } from "./middlewares/errorhandler.middleware.js";
 import { BASE_URL } from "./constants.js";
@@ -55,6 +57,7 @@ const clientUserModel = initClientUserModel(TaskapiClientsDb);
 const rawEventsClientModel = initRawEventModel(TaskapiClientsDb);
 const rawEventModel = initRawEventModel(TaskapiDb);
 const watermarkModel = initWatermarkModel(TaskapiClientsDb);
+const adminEventModel = initAdminEventModel(TaskapiDb);
 const { Rollup5m, Rollup1h, Rollup1d } = createRollupModels(TaskapiClientsDb);
 
 // await runTestMetrics(
@@ -122,8 +125,10 @@ const siteAdminRouter: express.Router = createSiteAdminRouter({
 	sessionModel,
 	// P0 fix: site-admin reads the clients-DB raw events (where the metrics
 	// middleware writes), not the empty TaskapiDb copy. Plus rollups for the
-	// rollup-backed aggregate routes.
+	// rollup-backed aggregate routes. Admin audit events live in their own
+	// collection (api_admin_events) — see adminEvent.schema.
 	rawEventModel: rawEventsClientModel,
+	adminEventModel,
 	Rollup5m,
 	Rollup1h,
 	Rollup1d,
