@@ -5,8 +5,16 @@ import { BULLMQ_CONSTANTS } from "../../../constants.js";
 import type { IRollupWatermark, RollupJobName } from "../../../modules/metrics/types/watermark.type.js";
 import type { IRollupBucket } from "../../../modules/metrics/types/rollupData.type.js";
 import type { RawEventDocument } from "../../../modules/metrics/types/rawEvent.type.js";
+import { rollup1dQueue, rollup1hQueue, rollup5mQueue } from "../queues/metricsQueue.js";
 
-const { WORKER_CONFIG, QUEUE_NAMES, WORKER_NAMES, ROLLUP_JOB_NAMES } = BULLMQ_CONSTANTS;
+const {
+	WORKER_CONFIG,
+	QUEUE_NAMES,
+	WORKER_NAMES,
+	ROLLUP_JOB_NAMES,
+	ROLLUP_INTERVALS,
+	SCHEDULER_IDS,
+} = BULLMQ_CONSTANTS;
 
 // Strip app-level redis options that conflict with BullMQ's internal connection
 const { lazyConnect: _lc, maxRetriesPerRequest: _mr, ...baseRedisConfig } = redisConfig as any;
@@ -112,4 +120,41 @@ export function initRollupWorkers(
 			},
 		}),
 	];
+}
+
+// ─── Repeatable scheduler registration ────────────────────────────────────────
+// BullMQ v5 periodic jobs via upsertJobScheduler (idempotent by schedulerId —
+// safe to call on every process start). Replaces the legacy queue.add(repeat)
+// pattern. Must run after the workers exist so a scheduler-fired job never
+// races a not-yet-started worker (queued jobs are retained either way).
+const TIER_SCHEDULERS = [
+	{
+		queue: rollup5mQueue,
+		schedulerId: SCHEDULER_IDS.ROLLUP_5M,
+		every: ROLLUP_INTERVALS.ROLLUP_5M,
+		jobName: ROLLUP_JOB_NAMES.ROLLUP_5M,
+	},
+	{
+		queue: rollup1hQueue,
+		schedulerId: SCHEDULER_IDS.ROLLUP_1H,
+		every: ROLLUP_INTERVALS.ROLLUP_1H,
+		jobName: ROLLUP_JOB_NAMES.ROLLUP_1H,
+	},
+	{
+		queue: rollup1dQueue,
+		schedulerId: SCHEDULER_IDS.ROLLUP_1D,
+		every: ROLLUP_INTERVALS.ROLLUP_1D,
+		jobName: ROLLUP_JOB_NAMES.ROLLUP_1D,
+	},
+];
+
+export async function initRollupSchedulers(): Promise<void> {
+	for (const t of TIER_SCHEDULERS) {
+		await t.queue.upsertJobScheduler(
+			t.schedulerId,
+			{ every: t.every, immediately: true },
+			{ name: t.jobName, data: {} },
+		);
+		console.info(`[scheduler] registered ${t.jobName} every ${t.every}ms`);
+	}
 }
