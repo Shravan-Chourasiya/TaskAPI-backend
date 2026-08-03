@@ -11,10 +11,12 @@ function toStatusClass(code: number): StatusClass {
 	return "5xx";
 }
 
-// Normalise the Express matched route pattern.
-// Falls back to raw path if no route was matched (e.g. 404).
+// Full request path, including the router mount prefix (baseUrl) that
+// req.route?.path / req.path omit when routes live under a mounted router.
+// Built from baseUrl + path rather than originalUrl so query strings don't
+// fragment the aggregated route field. Falls back if neither is present.
 function resolveRoute(req: Request): string {
-	return (req.route?.path as string | undefined) ?? req.path ?? "unknown";
+	return req.baseUrl + req.path || req.originalUrl || "unknown";
 }
 
 // ─── Augmented request type ───────────────────────────────────────────────────

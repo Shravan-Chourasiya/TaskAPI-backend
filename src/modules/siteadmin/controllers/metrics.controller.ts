@@ -92,10 +92,12 @@ export async function getEngagementMetrics(
 				$group: {
 					_id: { $dateToString: { format: "%Y-%m-%d", date: "$bucketStart" } },
 					totalRequests: { $sum: { $add: ["$successCount", "$errorCount"] } },
-					// one bucket doc per ownerId×bucketStart → distinct owners/day
-					activeUsers: { $sum: 1 },
+					// Buckets are keyed apiKeyId×bucketStart, so summing docs would
+					// count keys (one user × many keys → inflated). Dedupe owners.
+					uniqueOwners: { $addToSet: "$ownerId" },
 				},
 			},
+			{ $project: { _id: 1, totalRequests: 1, activeUsers: { $size: "$uniqueOwners" } } },
 			{ $sort: { _id: -1 } },
 			{ $limit: 30 },
 		]);
