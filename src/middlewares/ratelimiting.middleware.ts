@@ -166,7 +166,7 @@ export const apiCreationLimiter = rateLimit({
 		return acToken ? `token:${hashEmail(acToken)}` : `ip:${ip}`;
 	},
 	handler: rateLimitHandler,
-	skipFailedRequests: false, // Only count successful API key creations
+	skipFailedRequests: false, // Count all creation attempts, including failed ones
 });
 
 

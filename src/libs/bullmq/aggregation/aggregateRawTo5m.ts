@@ -12,14 +12,21 @@ export async function aggregateRawTo5m(
 	windowStart: Date,
 	windowEnd: Date,
 ): Promise<number> {
+	// "aborted" events have no HTTP status code and are not bucketed — the
+	// rollup schema only tracks success/error. Excluding them keeps them out
+	// of both successCount and errorCount (querying raw for aborted-rate later).
 	const events = await rawEventModel
-		.find({ timestamp: { $gte: windowStart, $lt: windowEnd } })
+		.find({
+			timestamp: { $gte: windowStart, $lt: windowEnd },
+			statusClass: { $ne: "aborted" },
+		})
 		.lean();
 
 	if (events.length === 0) return 0;
 
 	const grouped = new Map<string, {
 		apiKeyId: any;
+		ownerId: string;
 		bucketStart: Date;
 		successCount: number;
 		errorCount: number;
@@ -31,12 +38,13 @@ export async function aggregateRawTo5m(
 
 	for (const ev of events) {
 		const bucketStart = alignToBucket(ev.timestamp, "5m");
-		const key = `${ev.apiKeyId}_${bucketStart.getTime()}`;
+		const key = `${ev.apiKeyId}_${ev.ownerId}_${bucketStart.getTime()}`;
 
 		const apiKeyObjectId = new Types.ObjectId(ev.apiKeyId);
 		if (!grouped.has(key)) {
 			grouped.set(key, {
 				apiKeyId: apiKeyObjectId,
+				ownerId: ev.ownerId,
 				bucketStart,
 				successCount: 0,
 				errorCount: 0,
@@ -73,7 +81,8 @@ export async function aggregateRawTo5m(
 				$min: { minDuration: g.minDuration },
 				$max: { maxDuration: g.maxDuration },
 				$setOnInsert: {
-					granularity: "5m",
+					granularity: "5m" as const,
+					ownerId: g.ownerId,
 					expiresAt: new Date(g.bucketStart.getTime() + RETENTION_5M_MS),
 				},
 			},

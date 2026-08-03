@@ -132,7 +132,12 @@ export const CLIENT_OTP_TTL_SECONDS = 600; // 10 minutes
 
 // ============ METRICS ============
 export const METRICS_CONSTANTS = {
-	RAW_EVENT_TTL_SECONDS: 90 * 24 * 60 * 60, // 90 days
+	// Short retention: raw events are consumed by the 5m rollup worker within
+	// minutes; the rollup tiers carry the long history. Sized to the maximum
+	// acceptable worker-recovery time (the watermark-staleness bound), not to
+	// historical reporting — the TTL must stay far larger than the 5m rollup
+	// interval and the 15s safety buffer, which it does.
+	RAW_EVENT_TTL_SECONDS: 24 * 60 * 60, // 24 hours (was 90 days)
 	USER_AGENT_MAX_LENGTH: 200,
 	ERROR_LABEL_MAX_LENGTH: 100,
 } as const;
@@ -194,6 +199,18 @@ export const BULLMQ_CONSTANTS = {
 		ROLLUP_5M: "rollup_5m",
 		ROLLUP_1H: "rollup_1h",
 		ROLLUP_1D: "rollup_1d",
+	},
+	// Every-interval (ms) for each tier's repeatable scheduler.
+	ROLLUP_INTERVALS: {
+		ROLLUP_5M: 5 * 60 * 1000,
+		ROLLUP_1H: 60 * 60 * 1000,
+		ROLLUP_1D: 24 * 60 * 60 * 1000,
+	},
+	// stable IDs for upsertJobScheduler — idempotent across restarts.
+	SCHEDULER_IDS: {
+		ROLLUP_5M: "rollup-scheduler-5m",
+		ROLLUP_1H: "rollup-scheduler-1h",
+		ROLLUP_1D: "rollup-scheduler-1d",
 	},
 	SAFETY_BUFFER_MS: 15_000,           // 15s — avoids rolling up a window before all raw events land
 	RETENTION_MS: {

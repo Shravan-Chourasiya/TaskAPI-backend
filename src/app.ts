@@ -19,10 +19,11 @@ import { initClientUserModel } from "./modules/clientauth/schemas/userMongo.sche
 import { initRawEventModel } from "./modules/metrics/models/rawEvent.schema.js";
 import { createMetricsMiddleware } from "./middlewares/metricsCollector.middleware.js";
 import { createCsrfMiddleware } from "./middlewares/csrf.middleware.js";
+import { errorHandler } from "./middlewares/errorhandler.middleware.js";
 import { BASE_URL } from "./constants.js";
 import { initWatermarkModel } from "./modules/metrics/models/watermark.schema.js";
 import { createRollupModels } from "./modules/metrics/models/rollupData.schema.js";
-import { initRollupWorkers } from "./libs/bullmq/workers/metricsWorker.js";
+import { initRollupWorkers, initRollupSchedulers } from "./libs/bullmq/workers/metricsWorker.js";
 import { createRollupProcessor } from "./libs/bullmq/controllers/metricsworkers.controller.js";
 import { runTestMetrics } from "../scripts/testMetrics.js";
 import { createDashboardRouter } from "./routes/dashboard.routes.js";
@@ -75,6 +76,14 @@ initRollupWorkers(
 	createRollupProcessor,
 );
 
+// Register the 5m/1h/1d repeatable schedulers (idempotent). Fired after the
+// workers exist above; a Redis failure here must not kill boot.
+try {
+	await initRollupSchedulers();
+} catch (err) {
+	console.error("[metrics] Failed to register rollup schedulers:", err);
+}
+
 // =================== Api Routers Initialization ===================
 
 const authRouter: express.Router = createAuthRouter({
@@ -111,7 +120,13 @@ const siteAdminRouter: express.Router = createSiteAdminRouter({
 	apiKeyModel,
 	subscriptionModel,
 	sessionModel,
-	rawEventModel,
+	// P0 fix: site-admin reads the clients-DB raw events (where the metrics
+	// middleware writes), not the empty TaskapiDb copy. Plus rollups for the
+	// rollup-backed aggregate routes.
+	rawEventModel: rawEventsClientModel,
+	Rollup5m,
+	Rollup1h,
+	Rollup1d,
 });
 
 const dashboardRouter: express.Router = createDashboardRouter({
@@ -153,5 +168,10 @@ app.use(`${BASE_URL}/site-admin`, apiRateLimiter, siteAdminRouter);
 app.use(`${BASE_URL}/dashboard`, apiRateLimiter, dashboardRouter);
 
 app.use(`${BASE_URL}/`, apiRateLimiter, generalRouter);
+
+// =================== Error Handler (must be last) ===================
+// Centralized error middleware — catches errors routed via next(err) from
+// asyncErrorHandler and sets res.locals.errorCode for the metrics collector.
+app.use(errorHandler);
 
 export { app };
