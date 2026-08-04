@@ -5,11 +5,13 @@ import {
 	usernameSchema,
 } from "./auth.zodschema.js";
 
+// Partial patch — every field optional so an admin can edit a subset without
+// resending the full current user object (fetch-then-merge on the client).
 export const adminModifyUserSchema = z.object({
 	userNewData: z.object({
-		email: z.string().email(),
+		email: z.string().email().optional(),
 		username: z.string().optional(),
-		emailVerified: z.boolean(),
+		emailVerified: z.boolean().optional(),
 		verifiedAt: z.date().optional(),
 
 		// Profile
@@ -20,10 +22,10 @@ export const adminModifyUserSchema = z.object({
 			bio: z.string().optional(),
 			dateOfBirth: z.date().optional(),
 			phoneNumber: z.string().optional(),
-		}),
+		}).optional(),
 
 		// Access control
-		role: z.enum(["admin", "moderator", "user"]),
+		role: z.enum(["admin", "moderator", "user"]).optional(),
 		status: z.enum([
 			"active",
 			"inactive",
@@ -31,16 +33,16 @@ export const adminModifyUserSchema = z.object({
 			"pending",
 			"deleted",
 			"blacklisted",
-		]),
+		]).optional(),
 
 		// Security flags
-		twoFactorEnabled: z.boolean(),
-		failedLoginAttempts: z.number().int().nonnegative(),
+		twoFactorEnabled: z.boolean().optional(),
+		failedLoginAttempts: z.number().int().nonnegative().optional(),
 		accountLockedUntil: z.date().optional(),
 		lastFailedLoginAt: z.date().optional(),
 
 		// Soft delete / blacklist
-		isDeleted: z.boolean(),
+		isDeleted: z.boolean().optional(),
 		deletedAt: z.date().optional(),
 		scheduledDeletionAt: z.date().optional(),
 		blackListReason: z.string().optional(),

@@ -649,11 +649,13 @@ export async function recoverAccountController(
 		const clientId = req.apiOwnerId!;
 
 		const user = await userModel.findByEmail(clientId, email);
-		if (!user) {
-			return res.status(404).json(standardResponse(false, "User not found"));
-		}
-		if (!user.isDeleted) {
-			return res.status(400).json(standardResponse(false, "Account is not scheduled for deletion"));
+
+		// Generic responses in every branch prevent email enumeration and
+		// disclose neither whether the email is registered nor its deletion
+		// state (mirrors initiateForgotPasswordController). OTP only goes out
+		// when the account is actually scheduled for deletion.
+		if (!user || !user.isDeleted) {
+			return res.status(200).json(standardResponse(true, "If this account is scheduled for deletion, an OTP has been sent to your email."));
 		}
 
 		const result = await sendAndStoreOTP(
@@ -666,7 +668,7 @@ export async function recoverAccountController(
 			return res.status(503).json(standardResponse(false, result.message!));
 		}
 
-		return res.status(200).json(standardResponse(true, "OTP sent to your email. Verify via /verify?purpose=ac-re to complete recovery."));
+		return res.status(200).json(standardResponse(true, "If this account is scheduled for deletion, an OTP has been sent to your email."));
 	} catch (error) {
 		next(error);
 	}

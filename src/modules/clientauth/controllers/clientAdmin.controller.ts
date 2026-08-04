@@ -8,6 +8,7 @@ import {
 	adminModifyUserSchema,
 } from "../../../libs/zod/clientAdmin.zodschema.js";
 import { resolveClientId } from "../utils/clientAdminController.utils.js";
+import { clientUserUtils } from "../utils/clientUserUtils.js";
 
 type RequestWithApiOwner = Request & { apiOwnerId?: string };
 type RequestWithApiOwnerAndUserData = RequestWithApiOwner & {
@@ -25,15 +26,10 @@ export async function getAllUsersList(
 		if (!clientId) return;
 
 		const users = await clientUserModel.find({ clientId }).lean();
-		if (!users || users.length === 0) {
-			return res
-				.status(404)
-				.json(standardResponse(false, "No users found", null));
-		}
 
 		return res
 			.status(200)
-			.json(standardResponse(true, "Users fetched successfully", users));
+			.json(standardResponse(true, "Users fetched successfully", users ?? []));
 	} catch (err: any) {
 		next(err);
 	}
@@ -57,15 +53,10 @@ export async function getFilteredUsersList(
 		if (!clientId) return;
 
 		const users = await clientUserModel.find({ clientId, status }).lean();
-		if (!users || users.length === 0) {
-			return res
-				.status(404)
-				.json(standardResponse(false, "No users found", null));
-		}
 
 		return res
 			.status(200)
-			.json(standardResponse(true, "Users fetched successfully", users));
+			.json(standardResponse(true, "Users fetched successfully", users ?? []));
 	} catch (err: any) {
 		next(err);
 	}
@@ -126,10 +117,14 @@ export async function addUser(
 				.json(standardResponse(false, "Missing required fields", null));
 		}
 
-		const { verifiedAt, ...restNewUserData } = newUserData;
+		const { verifiedAt, password, ...restNewUserData } = newUserData;
+		const passwordHash = await clientUserUtils.hashPassword(password);
 		const newUserCreated = await clientUserModel.create({
 			clientId,
 			...restNewUserData,
+			// Hash the plaintext password before persisting; the schema only has
+			// passwordHash (strict mode), so the raw password must not survive.
+			passwordHash,
 			...(verifiedAt !== undefined && { verifiedAt }),
 		});
 
@@ -159,7 +154,10 @@ export async function deleteUser(
 				.json(standardResponse(false, "Missing Required Data", null));
 		}
 
-		const userToDelete = await clientUserModel.findOneAndUpdate(
+		// Soft delete only — sets the 30-day grace period. The hard delete is
+		// deferred to MongoDB's TTL index on scheduledDeletionAt, so the user has
+		// a recovery window (see recoverAccountController). Do NOT hard-delete here.
+		const deletedUser = await clientUserModel.findOneAndUpdate(
 			{ clientId, _id: userId },
 			{
 				isDeleted: true,
@@ -170,19 +168,21 @@ export async function deleteUser(
 			},
 			{ new: true },
 		);
-		if (!userToDelete) {
+		if (!deletedUser) {
 			return res
 				.status(404)
 				.json(standardResponse(false, "User not found", null));
 		}
 
-		const deletedUser = await clientUserModel.deleteOne({
-			clientId,
-			_id: userId,
-		});
 		return res
 			.status(200)
-			.json(standardResponse(true, "User Deleted Successfully!", deletedUser));
+			.json(
+				standardResponse(
+					true,
+					"User scheduled for deletion. Recovery window is 30 days.",
+					deletedUser,
+				),
+			);
 	} catch (err: any) {
 		next(err);
 	}
