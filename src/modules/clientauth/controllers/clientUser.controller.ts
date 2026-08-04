@@ -111,38 +111,17 @@ export async function loginController(
 
 		const isPasswordValid = await clientUserUtils.comparePassword(password, user.passwordHash);
 		if (!isPasswordValid) {
-			const updated = clientUserUtils.incrementFailedLogin(user);
-
-			// Build $set selectively — only include lock fields if a lock was actually applied
-			const failFields: Record<string, unknown> = {
-				failedLoginAttempts: updated.failedLoginAttempts,
-				lastFailedLoginAt: updated.lastFailedLoginAt,
-			};
-			if (updated.accountLockedUntil) {
-				failFields.accountLockedUntil = updated.accountLockedUntil;
-			}
-			if (updated.status === "suspended") {
-				failFields.status = "suspended";
-			}
-
+			// Only includes lock fields if a lock was actually applied
 			await userModel.findOneAndUpdate(
 				{ _id: user._id },
-				{ $set: failFields },
+				clientUserUtils.buildFailedLoginPatch(user),
 			);
 			return res.status(401).json(standardResponse(false, "Invalid password."));
 		}
 
 		await userModel.findOneAndUpdate(
 			{ _id: user._id },
-			{
-				$set: {
-					failedLoginAttempts: 0,
-					lastLoginAt: new Date(),
-					lastActiveAt: new Date(),
-					lastLoginIp: req.ip ?? "unknown",
-				},
-				$unset: { accountLockedUntil: "", lastFailedLoginAt: "" },
-			},
+			clientUserUtils.buildLoginSuccessPatch(req.ip ?? "unknown"),
 		);
 
 		return res.status(200).json(standardResponse(true, "Login successful", {
@@ -228,7 +207,7 @@ export async function verifyOTPController(
 
 				await userModel.findOneAndUpdate(
 					{ clientId, _id: user._id },
-					{ $set: { emailVerified: true, verifiedAt: new Date(), status: "active" } },
+					clientUserUtils.buildVerifyEmailPatch(),
 				);
 
 				return res.status(200).json(standardResponse(true, "Email verified successfully. You can now login."));
@@ -284,13 +263,7 @@ export async function verifyOTPController(
 				const newHash = await clientUserUtils.hashPassword(newPassword);
 				await userModel.findOneAndUpdate(
 					{ clientId, _id: user._id },
-					{
-						$set: {
-							passwordHash: newHash,
-							lastPassword: user.passwordHash,
-							lastPasswordChangedAt: new Date(),
-						},
-					},
+					clientUserUtils.buildPasswordChangePatch(newHash, user.passwordHash),
 				);
 
 				return res.status(200).json(standardResponse(true, "Password reset successfully. You can now login."));
@@ -319,13 +292,7 @@ export async function verifyOTPController(
 				const newHash = await clientUserUtils.hashPassword(newPassword);
 				await userModel.findOneAndUpdate(
 					{ clientId, _id: user._id },
-					{
-						$set: {
-							passwordHash: newHash,
-							lastPassword: user.passwordHash,
-							lastPasswordChangedAt: new Date(),
-						},
-					},
+					clientUserUtils.buildPasswordChangePatch(newHash, user.passwordHash),
 				);
 
 				return res.status(200).json(standardResponse(true, "Password updated successfully."));
@@ -350,13 +317,7 @@ export async function verifyOTPController(
 
 				await userModel.findOneAndUpdate(
 					{ clientId, _id: user._id },
-					{
-						$set: {
-							isDeleted: false,
-							status: user.emailVerified ? "active" : "pending",
-						},
-						$unset: { deletedAt: "", scheduledDeletionAt: "" },
-					},
+					clientUserUtils.buildRestorePatch(user.emailVerified),
 				);
 
 				return res.status(200).json(standardResponse(true, "Account recovered successfully. You can now login."));
@@ -613,19 +574,9 @@ export async function deleteAccountController(
 			return res.status(400).json(standardResponse(false, "Account already scheduled for deletion"));
 		}
 
-		const now = new Date();
 		await userModel.findOneAndUpdate(
 			{ clientId, _id: docId },
-			{
-				$set: {
-					isDeleted: true,
-					deletedAt: now,
-					status: "deleted",
-					scheduledDeletionAt: new Date(
-						now.getTime() + AUTH_CONSTANTS.SOFT_DELETE_GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1000,
-					),
-				},
-			},
+			clientUserUtils.buildSoftDeletePatch(),
 		);
 
 		return res.status(200).json(standardResponse(true, `Account scheduled for deletion. You can recover it within ${AUTH_CONSTANTS.SOFT_DELETE_GRACE_PERIOD_DAYS} days.`));

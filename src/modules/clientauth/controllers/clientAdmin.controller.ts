@@ -9,6 +9,7 @@ import {
 } from "../../../libs/zod/clientAdmin.zodschema.js";
 import { resolveClientId } from "../utils/clientAdminController.utils.js";
 import { clientUserUtils } from "../utils/clientUserUtils.js";
+import { AUTH_CONSTANTS } from "../../../constants.js";
 
 type RequestWithApiOwner = Request & { apiOwnerId?: string };
 type RequestWithApiOwnerAndUserData = RequestWithApiOwner & {
@@ -157,14 +158,12 @@ export async function deleteUser(
 		// Soft delete only — sets the 30-day grace period. The hard delete is
 		// deferred to MongoDB's TTL index on scheduledDeletionAt, so the user has
 		// a recovery window (see recoverAccountController). Do NOT hard-delete here.
+		// Same transition as deleteAccountController via the shared patch.
 		const deletedUser = await clientUserModel.findOneAndUpdate(
 			{ clientId, _id: userId },
 			{
-				isDeleted: true,
-				status: "deleted",
+				...clientUserUtils.buildSoftDeletePatch().$set,
 				lastActiveAt: new Date(),
-				deletedAt: new Date(),
-				scheduledDeletionAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
 			},
 			{ new: true },
 		);
@@ -179,7 +178,7 @@ export async function deleteUser(
 			.json(
 				standardResponse(
 					true,
-					"User scheduled for deletion. Recovery window is 30 days.",
+					`User scheduled for deletion. Recovery window is ${AUTH_CONSTANTS.SOFT_DELETE_GRACE_PERIOD_DAYS} days.`,
 					deletedUser,
 				),
 			);

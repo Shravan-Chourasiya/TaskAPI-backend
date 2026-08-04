@@ -9,6 +9,17 @@ export const sanitizeUser = (user: ClientUser) => {
 };
 
 // ─── User Utilities ───────────────────────────────────────────────────────────
+// State transitions return atomic mongoose update patches ({ $set, $unset })
+// so controllers persist them in a single findOneAndUpdate — no read-modify-write
+// race and one source of truth per transition. The mutation helpers below
+// (resetFailedLogin / updateLoginActivity / verifyEmail / softDelete / restore)
+// remain for callers that already hold a document and want to mutate in place.
+
+// Mongo update patch shape (subset of the operators used here)
+export type UpdatePatch = {
+	$set?: Record<string, unknown>;
+	$unset?: Record<string, unknown>;
+};
 
 export const clientUserUtils = {
 	async hashPassword(plainPassword: string): Promise<string> {
@@ -32,6 +43,7 @@ export const clientUserUtils = {
 		return user.status === "active" && user.emailVerified && !user.isDeleted;
 	},
 
+	// The one mutating helper the controllers still use (increment + lock escalation).
 	incrementFailedLogin(user: ClientUser): ClientUser {
 		user.failedLoginAttempts += 1;
 		user.lastFailedLoginAt = new Date();
@@ -48,6 +60,86 @@ export const clientUserUtils = {
 		return user;
 	},
 
+	// Increment + (optional) lock escalation, returned as an atomic patch.
+	// `user` is used for the current attempt count; the patch is $set-only so
+	// it can be merged with other $set fields (e.g. lastFailedLoginAt).
+	buildFailedLoginPatch(user: ClientUser): UpdatePatch {
+		const updated = clientUserUtils.incrementFailedLogin(user);
+		const $set: Record<string, unknown> = {
+			failedLoginAttempts: updated.failedLoginAttempts,
+			lastFailedLoginAt: updated.lastFailedLoginAt,
+		};
+		if (updated.accountLockedUntil) {
+			$set.accountLockedUntil = updated.accountLockedUntil;
+		}
+		if (updated.status === "suspended") {
+			$set.status = "suspended";
+		}
+		return { $set };
+	},
+
+	// Patch: set to active, bump login activity, clear failed-login/lock state.
+	buildLoginSuccessPatch(ip: string): UpdatePatch {
+		return {
+			$set: {
+				failedLoginAttempts: 0,
+				lastLoginAt: new Date(),
+				lastActiveAt: new Date(),
+				lastLoginIp: ip,
+			},
+			$unset: { accountLockedUntil: "", lastFailedLoginAt: "" },
+		};
+	},
+
+	// Patch: mark email verified and activate the account.
+	buildVerifyEmailPatch(): UpdatePatch {
+		return {
+			$set: {
+				emailVerified: true,
+				verifiedAt: new Date(),
+				status: "active",
+			},
+		};
+	},
+
+	// Patch: schedule deletion after the grace period; TTL index purges later.
+	buildSoftDeletePatch(): UpdatePatch {
+		return {
+			$set: {
+				isDeleted: true,
+				deletedAt: new Date(),
+				status: "deleted",
+				scheduledDeletionAt: new Date(
+					Date.now() + AUTH_CONSTANTS.SOFT_DELETE_GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1000,
+				),
+			},
+		};
+	},
+
+	// Patch: restore a soft-deleted account, choosing status by verification.
+	buildRestorePatch(emailVerified: boolean): UpdatePatch {
+		return {
+			$set: {
+				isDeleted: false,
+				status: emailVerified ? "active" : "pending",
+			},
+			$unset: { deletedAt: "", scheduledDeletionAt: "" },
+		};
+	},
+
+	// Patch: rotate password, keeping the previous hash for reuse-checking.
+	buildPasswordChangePatch(newHash: string, previousHash?: string): UpdatePatch {
+		const $set: Record<string, unknown> = {
+			passwordHash: newHash,
+			lastPasswordChangedAt: new Date(),
+		};
+		if (previousHash) {
+			$set.lastPassword = previousHash;
+		}
+		return { $set };
+	},
+
+	// Keep the mutating variants for external/legacy callers that hold a doc.
 	resetFailedLogin(user: ClientUser): ClientUser {
 		user.failedLoginAttempts = 0;
 		delete user.accountLockedUntil;
