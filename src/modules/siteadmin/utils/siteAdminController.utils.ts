@@ -50,7 +50,7 @@ export async function resolveAdminUser(
 		return null;
 	}
 
-	const user = await userModel.findById(userId).select("roles status");
+	const user = await userModel.findById(userId).select("role status");
 	if (!user) {
 		res.status(401).json(standardResponse(false, "Unauthorized", null));
 		return null;

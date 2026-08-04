@@ -208,9 +208,28 @@ export async function exportMetrics(
 
 		if (format === "csv") {
 			const headers = "timestamp,apiKeyId,ownerId,route,method,httpStatusCode,statusClass,durationMs,error\n";
+			// RFC 4180 escaping: wrap any field containing a comma, quote, or
+			// newline in double quotes, doubling embedded quotes. Prevents commas
+			// / newlines in route or error from corrupting the column layout.
+			const escapeCsv = (value: unknown): string => {
+				const s = value === null || value === undefined ? "" : String(value);
+				return /[",\n\r]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
+			};
 			const rows = events
 				.map((e) =>
-					[e.timestamp.toISOString(), e.apiKeyId, e.ownerId, e.route, e.method, e.httpStatusCode, e.statusClass, e.durationMs, e.error ?? ""].join(","),
+					[
+						e.timestamp.toISOString(),
+						e.apiKeyId,
+						e.ownerId,
+						e.route,
+						e.method,
+						e.httpStatusCode,
+						e.statusClass,
+						e.durationMs,
+						e.error ?? "",
+					]
+						.map(escapeCsv)
+						.join(","),
 				)
 				.join("\n");
 			res.setHeader("Content-Type", "text/csv");

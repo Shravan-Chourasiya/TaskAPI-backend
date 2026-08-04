@@ -1,5 +1,7 @@
 import crypto from "crypto";
+import bcrypt from "bcryptjs";
 import type { Request, NextFunction, Response } from "express";
+import { AUTH_CONSTANTS } from "../../../constants.js";
 import type { UserStaticMethods } from "../../../types/mongoModels/user.type.js";
 import type { ApiKeyStaticMethods } from "../../../types/mongoModels/apikeys.type.js";
 import { standardResponse } from "../../../utils/apiResponse.utils.js";
@@ -34,8 +36,8 @@ export async function getUserApiKeys(
 		const keys = await apiKeyModel.find({ userId }).lean();
 		if (!keys || keys.length === 0) {
 			return res
-				.status(404)
-				.json(standardResponse(false, "No API keys found", null));
+				.status(200)
+				.json(standardResponse(true, "API keys fetched successfully", []));
 		}
 
 		return res
@@ -158,11 +160,17 @@ export async function createUserApiKey(
 		}
 
 		const apiKeyValue = `tk_${env}_${crypto.randomBytes(16).toString("hex")}`;
+		// Hash the key before persisting — keyHash must never hold the raw value
+		// (the pre-save hook only hashes values that don't already start with "$2").
+		const keyHash = await bcrypt.hash(
+			apiKeyValue,
+			AUTH_CONSTANTS.BCRYPT_SALT_ROUNDS,
+		);
 		const apiKey = await apiKeyModel.create({
 			userId: String(userId),
 			name,
 			...(description !== undefined && { description }),
-			keyHash: apiKeyValue,
+			keyHash,
 			keyPrefix: apiKeyValue.slice(0, 8),
 			keyHint: apiKeyValue.slice(-4),
 			subscriptionType: user.subscriptionType,
@@ -333,7 +341,11 @@ export async function rotateApiKey(
 		}
 
 		const newKeyValue = `tk_${key.environment}_${crypto.randomBytes(16).toString("hex")}`;
-		key.keyHash = newKeyValue;
+		// Hash before persisting — never store the raw key in keyHash.
+		key.keyHash = await bcrypt.hash(
+			newKeyValue,
+			AUTH_CONSTANTS.BCRYPT_SALT_ROUNDS,
+		);
 		key.keyPrefix = newKeyValue.slice(0, 8);
 		key.keyHint = newKeyValue.slice(-4);
 		key.keyStatus = "active";

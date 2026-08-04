@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import bcrypt from "bcryptjs";
 import type { Request, NextFunction, Response } from "express";
 import type { UserStaticMethods } from "../../../types/mongoModels/user.type.js";
 import { standardResponse } from "../../../utils/apiResponse.utils.js";
@@ -9,7 +10,7 @@ import {
 import z from "zod";
 import { userActionSchema } from "../../../libs/zod/siteAdmin.zodschema.js";
 import type { UserRole } from "../../../constants.js";
-import { ROLE_RANK } from "../../../constants.js";
+import { ROLE_RANK, AUTH_CONSTANTS } from "../../../constants.js";
 
 type RequestWithUser = Request & { userID?: string };
 
@@ -29,8 +30,8 @@ export async function getAllUsers(
 			.lean();
 		if (!users || users.length === 0) {
 			return res
-				.status(404)
-				.json(standardResponse(false, "No users found", null));
+				.status(200)
+				.json(standardResponse(true, "Users fetched successfully", []));
 		}
 
 		return res
@@ -64,8 +65,8 @@ export async function getFilteredUsers(
 			.lean();
 		if (!users || users.length === 0) {
 			return res
-				.status(404)
-				.json(standardResponse(false, "No users found", null));
+				.status(200)
+				.json(standardResponse(true, "Users fetched successfully", []));
 		}
 
 		return res
@@ -334,7 +335,6 @@ export async function forcePasswordReset(
 		}
 
 		const { userId } = req.params;
-		const tempPassword = `$2${req.body.tempPassword}`;
 
 		const user = await userModel.findById(userId);
 		if (!user) {
@@ -343,7 +343,17 @@ export async function forcePasswordReset(
 				.json(standardResponse(false, "User not found", null));
 		}
 
-		user.passwordHash = tempPassword;
+		// Hash the temp password explicitly so the DB stores a real bcrypt hash
+		// (passing the raw value through passwordHash would make the pre-save
+		// hook hash it — only when it doesn't already start with "$2" — keeping
+		// the stored value consistent and login-able regardless).
+		const tempPassword = req.body.tempPassword;
+		const hashed = await bcrypt.hash(
+			tempPassword,
+			AUTH_CONSTANTS.BCRYPT_SALT_ROUNDS,
+		);
+
+		user.passwordHash = hashed;
 		user.lastPasswordChangedAt = new Date();
 		await user.save();
 
