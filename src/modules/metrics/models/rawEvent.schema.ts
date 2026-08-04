@@ -75,30 +75,30 @@ rawEventSchema.index(
 );
 
 // ─── Model factory ────────────────────────────────────────────────────────────
-export function initRawEventModel(db: mongoose.Connection): RawEventModel {
-	// Create the time-series collection if it does not exist yet.
-	// createCollection is a no-op if the collection already exists.
-	db.createCollection("api_raw_events", {
-		timeseries: {
-			timeField: "timestamp",
-			metaField: "apiKeyId",
-			granularity: "seconds",
-		},
-		// Mirror the TTL at the collection level (belt-and-suspenders).
-		expireAfterSeconds: RAW_EVENT_TTL_SECONDS,
-	}).catch((err: unknown) => {
+// Create the time-series collection (no-op if it already exists) and await it so
+// the collection is guaranteed to be backed by a real time-series bucket layout
+// before any raw event is written or read. Throwing on genuine failure makes the
+// app fail loudly at boot instead of racing the createCollection or writing into
+// an not-yet-time-series collection.
+export async function initRawEventModel(
+	db: mongoose.Connection,
+): Promise<RawEventModel> {
+	try {
+		await db.createCollection("api_raw_events", {
+			timeseries: {
+				timeField: "timestamp",
+				metaField: "apiKeyId",
+				granularity: "seconds",
+			},
+			// Mirror the TTL at the collection level (belt-and-suspenders).
+			expireAfterSeconds: RAW_EVENT_TTL_SECONDS,
+		});
+	} catch (err: unknown) {
 		// Code 48 = collection already exists — safe to ignore.
 		if ((err as { code?: number }).code !== 48) {
-			console.error(
-				"[metrics] Failed to create api_raw_events collection:",
-				err,
-			);
+			throw err;
 		}
-	});
-	
-	console.log(
-		"[RAWEVENTSCHEMA]: Created time-series collection api_raw_events with TTL ",
-	);
+	}
 
 	return db.model<RawEventDocument, RawEventModel>("RawEvent", rawEventSchema);
 }
