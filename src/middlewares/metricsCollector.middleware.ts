@@ -11,12 +11,18 @@ function toStatusClass(code: number): StatusClass {
 	return "5xx";
 }
 
-// Full request path, including the router mount prefix (baseUrl) that
-// req.route?.path / req.path omit when routes live under a mounted router.
-// Built from baseUrl + path rather than originalUrl so query strings don't
-// fragment the aggregated route field. Falls back if neither is present.
+// Full request path, including the router mount prefix (baseUrl).
+//
+// req.route.path is only the sub-path defined on the router (e.g. "/:id"),
+// and req.path / baseUrl alone fragment the metric across endpoints that live
+// on the same router. So we compose baseUrl + req.route.path to get the true
+// route pattern (e.g. "/client/tasks/:id") — not the concrete URL, so
+// per-endpoint grouping is stable. Falls back to the concrete URL when the
+// request never matched a route (404 / middleware-only paths).
 function resolveRoute(req: Request): string {
-	return req.baseUrl + req.path || req.originalUrl || "unknown";
+	const routePath = req.route?.path as string | undefined;
+	if (routePath) return (req.baseUrl + routePath) || req.originalUrl || "unknown";
+	return req.originalUrl || "unknown";
 }
 
 // ─── Augmented request type ───────────────────────────────────────────────────
