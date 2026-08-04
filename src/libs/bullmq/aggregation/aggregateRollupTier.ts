@@ -16,6 +16,11 @@ export async function aggregateRollupTier(
 
 	if (sourceBuckets.length === 0) return 0;
 
+	// IDEMPOTENCY: buckets are written with replaceOne (full-document upsert)
+	// keyed on (apiKeyId, bucketStart), not $inc. A retry after a crash re-derives
+	// the same window and overwrites buckets with identical values, so
+	// reprocessing can never double-count.
+
 	const grouped = new Map<string, {
 		apiKeyId: any;
 		ownerId: string;
@@ -58,24 +63,22 @@ export async function aggregateRollupTier(
 	const retentionMs = BULLMQ_CONSTANTS.RETENTION_MS[targetGranularity];
 
 	const ops = Array.from(grouped.values()).map((g) => ({
-		updateOne: {
+		replaceOne: {
 			filter: { apiKeyId: g.apiKeyId, bucketStart: g.bucketStart },
-			update: {
-				$inc: {
-					successCount:       g.successCount,
-					errorCount:         g.errorCount,
-					successDurationSum: g.successDurationSum,
-					errorDurationSum:   g.errorDurationSum,
-				},
-				$min: { minDuration: g.minDuration },
-				$max: { maxDuration: g.maxDuration },
-				$setOnInsert: {
-					granularity: targetGranularity,
-					ownerId: g.ownerId,
-					expiresAt: new Date(g.bucketStart.getTime() + retentionMs),
-				},
+			replacement: {
+				apiKeyId: g.apiKeyId,
+				ownerId: g.ownerId,
+				bucketStart: g.bucketStart,
+				granularity: targetGranularity,
+				successCount: g.successCount,
+				errorCount: g.errorCount,
+				successDurationSum: g.successDurationSum,
+				errorDurationSum: g.errorDurationSum,
+				minDuration: g.minDuration,
+				maxDuration: g.maxDuration,
+				expiresAt: new Date(g.bucketStart.getTime() + retentionMs),
 			},
-			upsert: true,
+			upsert: true, // create the bucket when it doesn't exist yet
 		},
 	}));
 

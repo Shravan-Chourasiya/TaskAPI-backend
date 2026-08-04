@@ -15,6 +15,12 @@ export async function aggregateRawTo5m(
 	// "aborted" events have no HTTP status code and are not bucketed — the
 	// rollup schema only tracks success/error. Excluding them keeps them out
 	// of both successCount and errorCount (querying raw for aborted-rate later).
+	//
+	// IDEMPOTENCY: buckets are written with replaceOne (full-document upsert)
+	// keyed on (apiKeyId, bucketStart), not $inc. If a worker crashes after the
+	// bucket write but before the watermark advance, the retry re-reads the same
+	// source window and regenerates the bucket to the identical value — a retry
+	// can never double-count.
 	const events = await rawEventModel
 		.find({
 			timestamp: { $gte: windowStart, $lt: windowEnd },
@@ -69,24 +75,22 @@ export async function aggregateRawTo5m(
 	}
 
 	const ops = Array.from(grouped.values()).map((g) => ({
-		updateOne: {
+		replaceOne: {
 			filter: { apiKeyId: g.apiKeyId, bucketStart: g.bucketStart },
-			update: {
-				$inc: {
-					successCount:       g.successCount,
-					errorCount:         g.errorCount,
-					successDurationSum: g.successDurationSum,
-					errorDurationSum:   g.errorDurationSum,
-				},
-				$min: { minDuration: g.minDuration },
-				$max: { maxDuration: g.maxDuration },
-				$setOnInsert: {
-					granularity: "5m" as const,
-					ownerId: g.ownerId,
-					expiresAt: new Date(g.bucketStart.getTime() + RETENTION_5M_MS),
-				},
+			replacement: {
+				apiKeyId: g.apiKeyId,
+				ownerId: g.ownerId,
+				bucketStart: g.bucketStart,
+				granularity: "5m" as const,
+				successCount: g.successCount,
+				errorCount: g.errorCount,
+				successDurationSum: g.successDurationSum,
+				errorDurationSum: g.errorDurationSum,
+				minDuration: g.minDuration,
+				maxDuration: g.maxDuration,
+				expiresAt: new Date(g.bucketStart.getTime() + RETENTION_5M_MS),
 			},
-			upsert: true,
+			upsert: true, // create the bucket when it doesn't exist yet
 		},
 	}));
 
