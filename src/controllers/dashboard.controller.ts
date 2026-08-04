@@ -111,11 +111,9 @@ export async function getAllApiMetricsController(
 	next: NextFunction,
 	{ userModel, apiKeyModel, Rollup5m, Rollup1h, Rollup1d }: ControllerDeps,
 ) {
-	console.log("getAllApiMetricsController called");
 	try {
 		const user = await resolveUser(req, res, userModel);
 		if (!user) return;
-		console.log("User resolved:", user);
 
 		const range = parseTimeRange(req, res);
 		if (!range) return;
@@ -131,18 +129,15 @@ export async function getAllApiMetricsController(
 				.status(404)
 				.json(standardResponse(false, "No API keys found for this user."));
 		}
-		console.log("API keys found:", apiKeys.length);
 		const apiKeyIds = apiKeys.map((k) => k._id);
 		const { tier, model } = selectRollupTier(from, to, {
 			Rollup5m,
 			Rollup1h,
 			Rollup1d,
 		});
-		console.log("Selected rollup tier:", tier);
 		// Single aggregation across the owner's keys, grouped per bucketStart.
 		// Bounds response size to the bucket count, independent of key count.
 		const buckets = await aggregateBucketsByApiKeys(model, from, to, apiKeyIds);
-		console.log("Aggregated buckets:", buckets.length);
 		return res.status(200).json(
 			standardResponse(true, "Metrics fetched successfully.", {
 				tier,
