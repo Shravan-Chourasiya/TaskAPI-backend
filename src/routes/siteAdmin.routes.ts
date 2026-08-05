@@ -21,6 +21,7 @@ import * as apistatsController from "../modules/siteadmin/controllers/apistats.c
 import { RawEventModel } from "../modules/metrics/types/rawEvent.type.js";
 import { IRollupBucket } from "../modules/metrics/types/rollupData.type.js";
 import { RawAdminEventModel } from "../modules/siteadmin/models/adminEvent.type.js";
+import { SecurityEventModel } from "../modules/siteadmin/models/securityEvent.type.js";
 import { createAdminMetricsMiddleware } from "../middlewares/adminMetricsCollector.middleware.js";
 
 export function createSiteAdminRouter({
@@ -30,6 +31,7 @@ export function createSiteAdminRouter({
 	sessionModel,
 	rawEventModel,
 	adminEventModel,
+	securityEventModel,
 	Rollup5m,
 	Rollup1h,
 	Rollup1d,
@@ -40,6 +42,7 @@ export function createSiteAdminRouter({
 	sessionModel: SessionStaticMethods;
 	rawEventModel: RawEventModel;
 	adminEventModel: RawAdminEventModel;
+	securityEventModel: SecurityEventModel;
 	Rollup5m: Model<IRollupBucket>;
 	Rollup1h: Model<IRollupBucket>;
 	Rollup1d: Model<IRollupBucket>;
@@ -303,6 +306,7 @@ export function createSiteAdminRouter({
 		auditlogsController.getSecurityEvents(req, res, next, {
 			userModel,
 			adminEventModel,
+			securityEventModel,
 		}),
 	);
 
