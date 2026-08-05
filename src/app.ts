@@ -20,6 +20,8 @@ import { initRawEventModel } from "./modules/metrics/models/rawEvent.schema.js";
 import { createMetricsMiddleware } from "./middlewares/metricsCollector.middleware.js";
 import { createAdminMetricsMiddleware } from "./middlewares/adminMetricsCollector.middleware.js";
 import { initAdminEventModel } from "./modules/siteadmin/models/adminEvent.schema.js";
+import { initSecurityEventModel } from "./modules/siteadmin/models/securityEvent.schema.js";
+import { createSecurityMetricsMiddleware } from "./middlewares/securityMetricsCollector.middleware.js";
 import { createCsrfMiddleware } from "./middlewares/csrf.middleware.js";
 import { errorHandler } from "./middlewares/errorhandler.middleware.js";
 import { BASE_URL } from "./constants.js";
@@ -58,6 +60,7 @@ const rawEventsClientModel = await initRawEventModel(TaskapiClientsDb);
 const rawEventModel = await initRawEventModel(TaskapiDb);
 const watermarkModel = initWatermarkModel(TaskapiClientsDb);
 const adminEventModel = initAdminEventModel(TaskapiDb);
+const securityEventModel = initSecurityEventModel(TaskapiDb);
 const { Rollup5m, Rollup1h, Rollup1d } = createRollupModels(TaskapiClientsDb);
 
 // await runTestMetrics(
@@ -129,6 +132,7 @@ const siteAdminRouter: express.Router = createSiteAdminRouter({
 	// collection (api_admin_events) — see adminEvent.schema.
 	rawEventModel: rawEventsClientModel,
 	adminEventModel,
+	securityEventModel,
 	Rollup5m,
 	Rollup1h,
 	Rollup1d,
@@ -160,6 +164,12 @@ app.use(helmet({ contentSecurityPolicy: false }));
 app.use(morgan(config.NODE_ENV === "production" ? "combined" : "development"));
 app.use(cors(corsOptions));
 app.use(createMetricsMiddleware(rawEventsClientModel));
+// P3 fix (TODOS_CRIT): record failed-auth / forbidden requests (401/403) that
+// resolved no identity — those die in the auth middlewares before the API-key
+// (apiKeyId) or admin (userID/_adminRole) collectors can see them, so security
+// analytics were blind to brute-force / credential-stuffing attempts. This
+// guard only writes anonymous 401/403, so it never duplicates the other two.
+app.use(createSecurityMetricsMiddleware(securityEventModel));
 app.use(createCsrfMiddleware(sessionModel));
 
 // =================== Routes Integration ===================
