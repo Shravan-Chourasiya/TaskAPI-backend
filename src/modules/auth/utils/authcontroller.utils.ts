@@ -172,7 +172,7 @@ export const issueTokensAndCreateSession = async (
 			res.cookie("acToken", accessToken, {
 				httpOnly: true,
 				secure: true,
-				sameSite: "lax",
+				sameSite: "none",
 				maxAge: 600000,
 			});
 			return sendCsrfResponse(req, res, csrfToken, 200, {
@@ -265,19 +265,19 @@ export const issueTokensAndCreateSession = async (
 			res.cookie("rfToken", refreshToken, {
 				httpOnly: true,
 				secure: true,
-				sameSite: "lax",
+				sameSite: "none",
 				maxAge: 604800000,
 			});
 			res.cookie("acToken", accessToken, {
 				httpOnly: true,
 				secure: true,
-				sameSite: "lax",
+				sameSite: "none",
 				maxAge: 600000,
 			});
 			res.cookie("devid", deviceId, {
 				httpOnly: true,
 				secure: true,
-				sameSite: "lax",
+				sameSite: "none",
 				maxAge: 604800000 * 4,
 			});
 			return sendCsrfResponse(req, res, csrfToken, 200, {

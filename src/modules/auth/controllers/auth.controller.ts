@@ -179,13 +179,13 @@ export async function loginController(
 			res.cookie("devid", devId, {
 				httpOnly: true,
 				secure: true,
-				sameSite: "lax",
+				sameSite: "none",
 				maxAge: 600000,
 			});
 			res.cookie("tempToken", tempToken, {
 				httpOnly: true,
 				secure: true,
-				sameSite: "lax",
+				sameSite: "none",
 				maxAge: 600000,
 			});
 			{
@@ -303,13 +303,13 @@ export async function tokenRotationController(
 		res.cookie("rfToken", newRfToken, {
 			httpOnly: true,
 			secure: true,
-			sameSite: "lax",
+			sameSite: "none",
 			maxAge: 604800000,
 		});
 		res.cookie("acToken", acToken, {
 			httpOnly: true,
 			secure: true,
-			sameSite: "lax",
+			sameSite: "none",
 			maxAge: 600000,
 		});
 		return sendCsrfResponse(req, res, csrfToken, 200, {
@@ -373,13 +373,13 @@ export async function logoutController(
 		res.clearCookie("rfToken", {
 			httpOnly: true,
 			secure: true,
-			sameSite: "lax",
+			sameSite: "none",
 			maxAge: 604800000,
 		});
 		res.clearCookie("acToken", {
 			httpOnly: true,
 			secure: true,
-			sameSite: "lax",
+			sameSite: "none",
 			maxAge: 600000,
 		});
 		res.status(200).json({
