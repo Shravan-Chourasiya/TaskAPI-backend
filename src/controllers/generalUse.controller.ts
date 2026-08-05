@@ -1,6 +1,8 @@
 import type { NextFunction, Request, Response } from "express";
 import { config } from "../configs/app.config.js";
 import jwt, { type JwtPayload } from "jsonwebtoken";
+import mongoose from "mongoose";
+import { redisClient } from "../configs/redis.init.js";
 import { contactUsSchema } from "../libs/zod/general.zodschema.js";
 import * as z from "zod";
 import {
@@ -83,13 +85,43 @@ export const isUserController = async (
 	}
 };
 
-export const healthCheckController = (
+export const healthCheckController = async (
 	req: Request,
 	res: Response,
 	next: NextFunction,
 ) => {
 	try {
-		res.status(200).json({ status: "OK", message: "Health check passed" });
+		const results = await Promise.allSettled([
+			// Mongo — readyState: 1=connected
+			Promise.resolve(mongoose.connection.readyState),
+			// Redis — lightweight round-trip with a short timeout
+			redisClient.ping().then(
+				(v) => v,
+				(err) => {
+					throw err;
+				},
+			),
+		]);
+
+		const mongoResult = results[0];
+		const redisResult = results[1];
+
+		const dbUp =
+			mongoResult.status === "fulfilled" && mongoResult.value === 1;
+		const redisUp = redisResult.status === "fulfilled";
+
+		const checks = {
+			db: { status: dbUp ? "up" : "down" },
+			redis: { status: redisUp ? "up" : "down" },
+		};
+
+		const statusCode = dbUp && redisUp ? 200 : 503;
+
+		res.status(statusCode).json({
+			status: statusCode === 200 ? "OK" : "DEGRADED",
+			message: statusCode === 200 ? "Health check passed" : "Dependency check failed",
+			checks,
+		});
 	} catch (error) {
 		next(error);
 	}
@@ -124,8 +156,6 @@ export const checkUsernameController = async (
 	try {
 		// amazonq-ignore-next-line
 		const { username } = req.query;
-		// amazonq-ignore-next-line
-		console.log(username, typeof username);
 		if (!username || typeof username !== "string") {
 			return res
 				.status(400)

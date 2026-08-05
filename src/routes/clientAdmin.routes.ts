@@ -10,6 +10,7 @@ import { resolveScopes } from "../middlewares/scopeResolver.middleware.js";
 import { createMiddlewareWrapper } from "../utils/middlewareWrapper.js";
 import { asyncErrorHandler } from "../utils/asynchandler.utils.js";
 import { clientApiRateLimiter } from "../modules/clientauth/utils/rateLimiters.js";
+import { apikeyUsageLimiter } from "../middlewares/ratelimiting.middleware.js";
 
 export function createClientAdminRouter({
 	clientUserModel,
@@ -46,7 +47,14 @@ export function createClientAdminRouter({
 		asyncErrorHandler,
 	);
 
-	router.use(apikeyHandler, ipResolver, scopeResolver, clientApiRateLimiter, sessionGuard);
+	router.use(
+		apikeyHandler,
+		ipResolver,
+		scopeResolver,
+		clientApiRateLimiter,
+		apikeyUsageLimiter,
+		sessionGuard,
+	);
 
 	router.get("/users", (req, res, next) =>
 		clientAdminControllers.getAllUsersList(req, res, next, clientUserModel),
