@@ -21,6 +21,9 @@ export const apikeyHandlerFunction = async (
 	const apiKey = req.headers["x-api-key"] as string | undefined;
 
 	if (!apiKey || typeof apiKey !== "string") {
+		// Stamp a machine-readable label so the security collector (P3) can
+		// group this anonymous 401 without scraping the response body.
+		res.locals.errorCode = "MISSING_KEY";
 		return res
 			.status(401)
 			.json(standardResponse(false, "Unauthorized: API key is missing"));
@@ -39,6 +42,9 @@ export const apikeyHandlerFunction = async (
 		.select("+keyHash");
 
 	if (!apiKeyDoc) {
+		// Indistinguishable "invalid | revoked | blacklisted" — matches the
+		// security-events filter list REVOKED_KEY/BLACKLISTED buckets.
+		res.locals.errorCode = apiKey ? "REVOKED_KEY" : "MISSING_KEY";
 		return res
 			.status(401)
 			.json(
@@ -48,6 +54,7 @@ export const apikeyHandlerFunction = async (
 
 	// Check expiry
 	if (apiKeyDoc.expiresAt && new Date() > apiKeyDoc.expiresAt) {
+		res.locals.errorCode = "KEY_EXPIRED";
 		return res
 			.status(401)
 			.json(standardResponse(false, "Unauthorized: API key has expired"));
@@ -56,6 +63,7 @@ export const apikeyHandlerFunction = async (
 	// Verify full key against stored hash
 	const isValid = await bcrypt.compare(apiKey, apiKeyDoc.keyHash);
 	if (!isValid) {
+		res.locals.errorCode = "INVALID_KEY";
 		return res
 			.status(401)
 			.json(standardResponse(false, "Unauthorized: Invalid API key"));
