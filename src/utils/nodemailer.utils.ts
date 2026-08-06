@@ -2,6 +2,7 @@ import { config } from "../configs/app.config.js";
 import crypto from "crypto";
 import { AUTH_CONSTANTS } from "../constants.js";
 import { NodemailerError } from "../types/errors.interface.js";
+import { logger } from "./logger.utils.js";
 
 export function generateOTP() {
 	return crypto.randomInt(100000, 999999).toString();
@@ -13,22 +14,22 @@ export function handleNodemailerError(err: Error): string {
 	switch (error.code) {
 		case "ECONNECTION":
 		case "ETIMEDOUT":
-			console.error("Network error - retry later:", error.message);
+			logger.error("Network error - retry later:", { message: error.message });
 			throw new Error("Network error - please try again later");
 			break;
 
 		case "EAUTH":
-			console.error("Authentication failed:", error.message);
+			logger.error("Authentication failed:", { message: error.message });
 			throw new Error("Authentication failed - please check credentials");
 			break;
 
 		case "EENVELOPE":
-			console.error("Invalid recipients:", error.rejected);
+			logger.error("Invalid recipients:", { rejected: error.rejected });
 			throw new Error("Invalid recipient email address");
 			break;
 
 		default:
-			console.error("Send failed:", error.message, error);
+			logger.error("Send failed:", { message: error.message, error });
 			throw new Error("Failed to send email - please try again");
 	}
 }

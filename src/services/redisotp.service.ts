@@ -1,6 +1,7 @@
 // services/otp.service.ts
 import bcrypt from "bcryptjs";
 import { redisClient } from "../configs/redis.init.js";
+import { logger } from "../utils/logger.utils.js";
 
 interface PendingOTP {
 	otpHash: string;
@@ -52,7 +53,7 @@ export const otpService = {
 			expiresAt: Date.now() + ttl * 1000,
 		};
   // amazonq-ignore-next-line
-		console.warn(`Storing OTP with key :: ${key}`);
+		logger.warn(`Storing OTP with key :: ${key}`);
 		// Store in Redis with TTL
 		await redisClient.setex(key, ttl, JSON.stringify(data));
 		return { success: true };
@@ -73,7 +74,7 @@ export const otpService = {
 	): Promise<{ success: boolean; message: string; userId?: string; newValue?: string }> {
 		const key = `${keyPrefix}${email.toLowerCase()}:${purpose}`;
   // amazonq-ignore-next-line
-		console.warn(`Verifying OTP for key :: ${key}`);
+		logger.warn(`Verifying OTP for key :: ${key}`);
 		const rawData = await redisClient.get(key);
 		if (!rawData) {
 			return { success: false, message: "OTP not found or expired" };

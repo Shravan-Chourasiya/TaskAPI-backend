@@ -11,6 +11,7 @@ import {
 	SessionDocument,
 	SessionStaticMethods,
 } from "../types/mongoModels/session.type.js";
+import { logger } from "../utils/logger.utils.js";
 
 type RequestWithUser = Request & {
 	userID?: string;
@@ -153,7 +154,7 @@ export const refreshTokenHandlerFunction = async (
 	// 4. Check token family (theft detection)
 	if (decoded.tokenFamily && decoded.tokenFamily !== session.tokenFamily) {
 		// Token family mismatch = token theft detected
-		console.warn(
+		logger.warn(
 			`⚠️ Token theft detected for user ${decoded.id}. Revoking all sessions.`,
 		);
 

@@ -1,5 +1,6 @@
 import { config } from "../configs/app.config.js";
 import twilio from "twilio";
+import { logger } from "../utils/logger.utils.js";
 
 const accountSid = config.TWILIO_ACCOUNT_SID;
 const authToken = config.TWILIO_AUTH_TOKEN;
@@ -12,6 +13,6 @@ export async function sendVerificationSMS(to: string, otp: string) {
 		to: to,
 	});
 
-	console.warn(message.body);
+	logger.warn(message.body);
 }
 

@@ -13,6 +13,7 @@ import {
 	issueTokensAndCreateSession,
 } from "../utils/authcontroller.utils.js";
 import { generateCsrfToken } from "../../../middlewares/csrf.middleware.js";
+import { logger } from "../../../utils/logger.utils.js";
 import { sendCsrfResponse } from "../../../utils/apiResponse.utils.js";
 import * as z from "zod";
 import crypto from "crypto";
@@ -889,7 +890,7 @@ export async function setPhoneNumberController(
 			});
 		}
 		await sendVerificationSMS(phoneNumber, otp);
-		console.warn("OTP for phone verification:", otp);
+		logger.warn("OTP for phone verification:", { otp });
 
 		return res.status(200).json({
 			message:
