@@ -30,6 +30,7 @@ import { createRollupModels } from "./modules/metrics/models/rollupData.schema.j
 import { initRollupWorkers, initRollupSchedulers } from "./libs/bullmq/workers/metricsWorker.js";
 import { createRollupProcessor } from "./libs/bullmq/controllers/metricsworkers.controller.js";
 import { runTestMetrics } from "../scripts/testMetrics.js";
+import { logger } from "./utils/logger.utils.js";
 import { createDashboardRouter } from "./routes/dashboard.routes.js";
 import { createClientAdminRouter } from "./routes/clientAdmin.routes.js";
 import { createSiteAdminRouter } from "./routes/siteAdmin.routes.js";
@@ -87,7 +88,7 @@ initRollupWorkers(
 try {
 	await initRollupSchedulers();
 } catch (err) {
-	console.error("[metrics] Failed to register rollup schedulers:", err);
+	logger.error("[metrics] Failed to register rollup schedulers:", { err });
 }
 
 // =================== Api Routers Initialization ===================

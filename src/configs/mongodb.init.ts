@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { config } from "./app.config.js";
+import { logger } from "../utils/logger.utils.js";
 
 type ClusterConnType = mongoose.Mongoose | null | undefined;
 
@@ -8,14 +9,14 @@ async function dbConnect() {
 	try {
 		const isConnectionExists = mongoose.connection.readyState;
 		if (isConnectionExists === 1) {
-			console.log("Mongo Cluster Connection Already Established !");
+			logger.info("Mongo Cluster Connection Already Established !");
 		} else {
 			const clusterConn: ClusterConnType = await mongoose.connect(uri);
-			console.log("Mongo Cluster Connected Successfully!");
+			logger.info("Mongo Cluster Connected Successfully!");
 			return clusterConn;
 		}
 	} catch (error) {
-		console.error("ERR:DB CONNECTION FAILED", error);
+		logger.error("ERR:DB CONNECTION FAILED", { error });
 		process.exit(1);
 	}
 }

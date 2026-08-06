@@ -1,6 +1,7 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool, type PoolConfig } from "pg";
 import { config } from "./app.config.js";
+import { logger } from "../utils/logger.utils.js";
 
 let pool: Pool | undefined;
 let db: ReturnType<typeof drizzle> | undefined;
@@ -32,10 +33,10 @@ export async function testPgConnection() {
 	const pgDb = getPgDb();
 	const result = await pgDb.execute("select 1");
 	if (result.rows.length > 0) {
-		console.log("PostgreSQL connection successful.");
+		logger.info("PostgreSQL connection successful.");
 		return true;
 	} else {
-		console.error("Failed to connect to PostgreSQL.");
+		logger.error("Failed to connect to PostgreSQL.");
 		return false;
 	}
 }
