@@ -1,6 +1,7 @@
 import { type Request, type Response, type NextFunction, type RequestHandler } from "express";
 import type { RawEventModel, StatusClass } from "../modules/metrics/types/rawEvent.type.js";
 import { METRICS_CONSTANTS } from "../constants.js";
+import { logger } from "../utils/logger.utils.js";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -103,9 +104,8 @@ export function createMetricsMiddleware(rawEventModel: RawEventModel): RequestHa
 				.catch((err: unknown) => {
 					// Structured visibility on write failure. Never blocks or
 					// fails the user-facing response — this is fire-and-forget.
-					// TODO: replace with winston/pino once a logging util exists.
 					const e = err as { message?: string; stack?: string };
-					console.error(JSON.stringify({
+					logger.error("raw_event_write_failed", {
 						source: "metricsCollector",
 						event: "raw_event_write_failed",
 						apiKeyId: req.apiKeyId,
@@ -118,7 +118,7 @@ export function createMetricsMiddleware(rawEventModel: RawEventModel): RequestHa
 						errMessage: e.message,
 						errStack: e.stack,
 						timestamp: new Date().toISOString(),
-					}));
+					});
 				});
 		};
 

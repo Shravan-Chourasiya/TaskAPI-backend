@@ -6,6 +6,7 @@ import type { IRollupWatermark, RollupJobName } from "../../../modules/metrics/t
 import type { IRollupBucket } from "../../../modules/metrics/types/rollupData.type.js";
 import type { RawEventDocument } from "../../../modules/metrics/types/rawEvent.type.js";
 import { rollup1dQueue, rollup1hQueue, rollup5mQueue } from "../queues/metricsQueue.js";
+import { logger } from "../../../utils/logger.utils.js";
 
 const {
 	WORKER_CONFIG,
@@ -57,13 +58,13 @@ function initTierWorker({ queueName, workerName, processorFactory, deps }: TierW
 	});
 
 	worker.on("completed", (job) =>
-		console.info(`[${workerName}] job ${job.id} completed`),
+		logger.info(`[${workerName}] job ${job.id} completed`),
 	);
 	worker.on("failed", (job, err) =>
-		console.error(`[${workerName}] job ${job?.id} failed:`, err.message),
+		logger.error(`[${workerName}] job ${job?.id} failed:`, { message: err.message }),
 	);
 	worker.on("error", (err) =>
-		console.error(`[${workerName}] worker error:`, err.message),
+		logger.error(`[${workerName}] worker error:`, { message: err.message }),
 	);
 
 	return worker;
@@ -155,6 +156,6 @@ export async function initRollupSchedulers(): Promise<void> {
 			{ every: t.every, immediately: true },
 			{ name: t.jobName, data: {} },
 		);
-		console.info(`[scheduler] registered ${t.jobName} every ${t.every}ms`);
+		logger.info(`[scheduler] registered ${t.jobName} every ${t.every}ms`);
 	}
 }

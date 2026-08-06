@@ -1,6 +1,7 @@
 import { type Request, type Response, type NextFunction, type RequestHandler } from "express";
 import type { StatusClass } from "../modules/metrics/types/rawEvent.type.js";
 import type { SecurityEventModel } from "../modules/siteadmin/models/securityEvent.type.js";
+import { logger } from "../utils/logger.utils.js";
 
 // Status-class helper mirrored from metricsCollector (kept local — importing
 // across feature boundaries for a two-line fn isn't worth the coupling).
@@ -87,7 +88,7 @@ export function createSecurityMetricsMiddleware(
 				})
 				.catch((err: unknown) => {
 					const e = err as { message?: string; stack?: string };
-					console.error(JSON.stringify({
+					logger.error("security_event_write_failed", {
 						source: "securityMetricsCollector",
 						event: "security_event_write_failed",
 						route: req.originalUrl,
@@ -96,7 +97,7 @@ export function createSecurityMetricsMiddleware(
 						errMessage: e.message,
 						errStack: e.stack,
 						timestamp: new Date().toISOString(),
-					}));
+					});
 				});
 		};
 

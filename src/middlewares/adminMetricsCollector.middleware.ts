@@ -1,6 +1,7 @@
 import { type Request, type Response, type NextFunction, type RequestHandler } from "express";
 import type { StatusClass } from "../modules/metrics/types/rawEvent.type.js";
 import type { RawAdminEventModel, AdminRole } from "../modules/siteadmin/models/adminEvent.type.js";
+import { logger } from "../utils/logger.utils.js";
 
 // Status-class helper mirrored from metricsCollector (kept local — importing
 // across feature boundaries for a two-line fn isn't worth the coupling).
@@ -79,7 +80,7 @@ export function createAdminMetricsMiddleware(
 				.catch((err: unknown) => {
 					// Fire-and-forget — never block or fail the admin response.
 					const e = err as { message?: string; stack?: string };
-					console.error(JSON.stringify({
+					logger.error("admin_event_write_failed", {
 						source: "adminMetricsCollector",
 						event: "admin_event_write_failed",
 						adminId: req.userID,
@@ -90,7 +91,7 @@ export function createAdminMetricsMiddleware(
 						errMessage: e.message,
 						errStack: e.stack,
 						timestamp: new Date().toISOString(),
-					}));
+					});
 				});
 		};
 

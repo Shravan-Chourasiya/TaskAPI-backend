@@ -9,6 +9,7 @@ import { aggregateRawTo5m } from "../aggregation/aggregateRawTo5m.js";
 import { aggregateRollupTier } from "../aggregation/aggregateRollupTier.js";
 import { windowEnd } from "../../../utils/bucketAlign.js";
 import { BULLMQ_CONSTANTS } from "../../../constants.js";
+import { logger } from "../../../utils/logger.utils.js";
 
 export function createRollupProcessor(deps: TierProcessorDeps) {
 	return async (_job: unknown): Promise<void> => {
@@ -52,7 +53,7 @@ export function createRollupProcessor(deps: TierProcessorDeps) {
 
 			const durationMs = Date.now() - startedAt;
 			await advanceWatermark(watermarkModel, jobName, windowEndDate, durationMs);
-			console.info(`[${jobName}] processed ${processedCount} docs in ${durationMs}ms`);
+			logger.info(`[${jobName}] processed ${processedCount} docs in ${durationMs}ms`);
 		} catch (err: any) {
 			await markWatermarkFailed(watermarkModel, jobName, err.message);
 			throw err;
