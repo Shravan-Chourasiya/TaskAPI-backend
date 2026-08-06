@@ -1,6 +1,7 @@
 import { type Request, type Response, type NextFunction } from "express";
 import { classifyError } from "../middlewares/errorhandler.middleware.js";
 import { AppError } from "../types/errors.interface.js";
+import { logger } from "./logger.utils.js";
 
 type AsyncFn = (
 	req: Request,
@@ -20,8 +21,9 @@ export const asyncErrorHandler = (fn: AsyncFn) => {
 
 			// Log server errors
 			if (status >= 500) {
-				console.error(`[${errSrc}] Server error:`, err);
-				// TODO: Replace with proper logging mechanism (Winston, Pino, etc.)
+				logger.error(`[${errSrc}] ${req.method} ${req.originalUrl}: ${message}`, {
+					stack: err && typeof err === "object" && "stack" in err ? (err as Error).stack : undefined,
+				});
 			}
 
 			// Send single response

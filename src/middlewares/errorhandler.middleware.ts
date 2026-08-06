@@ -2,6 +2,7 @@ import jwt from "jsonwebtoken";
 import multer from "multer";
 import type { ErrorRequestHandler } from "express";
 import { AppError } from "../types/errors.interface.js";
+import { logger } from "../utils/logger.utils.js";
 
 interface ClassErrReturnType {
 	status: number;
@@ -121,7 +122,7 @@ export function classifyError(err: unknown): ClassErrReturnType {
  */
 export const errorHandler: ErrorRequestHandler = (
 	err,
-	_req,
+	req,
 	res,
 	_next,
 ): void => {
@@ -130,8 +131,9 @@ export const errorHandler: ErrorRequestHandler = (
 
 	// Log server errors
 	if (status >= 500) {
-		console.error(`[${errSrc}] Server error:`, err);
-		// TODO: Replace with proper logging mechanism (Winston, Pino, etc.)
+		logger.error(`[${errSrc}] ${req.method} ${req.originalUrl}: ${message}`, {
+			stack: err && typeof err === "object" && "stack" in err ? (err as Error).stack : undefined,
+		});
 	}
 
 	// Only send if headers not already sent — protects the finish/close flow.
