@@ -12,10 +12,10 @@ export const fileUploadMiddleware = async (
 	next: NextFunction,
 ) => {
 	try {
-		// amazonq-ignore-next-line
-		const contentType: string = Array.isArray(req.headers["content-type"])
-			? req.headers["content-type"].join(",")
-			: req.headers["content-type"] ?? "";
+		const rawContentType = req.headers["content-type"];
+		const contentType: string = Array.isArray(rawContentType)
+			? rawContentType.join(",")
+			: rawContentType ?? "";
 
 		if (!contentType.includes("multipart/form-data")) {
 			// Non-multipart: pass through as-is (JSON profile update without file)
