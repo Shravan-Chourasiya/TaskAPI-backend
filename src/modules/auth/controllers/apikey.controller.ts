@@ -8,6 +8,7 @@ import {
 } from "../../../libs/zod/apikey.zodschema.js";
 import * as z from "zod";
 import crypto from "crypto";
+import bcrypt from "bcryptjs";
 import { standardResponse } from "../../../utils/apiResponse.utils.js";
 import mongoose from "mongoose";
 import { Model } from "mongoose";
@@ -104,14 +105,13 @@ export const createApiKeyController = async (
 				);
 		}
 		const apiKeyValue = `tk_${env}_${crypto.randomBytes(16).toString("hex")}`;
-
-	
+		const keyHash = await bcrypt.hash(apiKeyValue, 12);
 
 		const apiKey: ApiKeyDocument = await apiKeyModel.create({
 			userId,
 			name,
 			...(description !== undefined && { description }),
-			keyHash: apiKeyValue,
+			keyHash,
 			keyPrefix: apiKeyValue.slice(0, 8),
 			keyHint: apiKeyValue.slice(-4),
 			subscriptionType: user.subscriptionType,

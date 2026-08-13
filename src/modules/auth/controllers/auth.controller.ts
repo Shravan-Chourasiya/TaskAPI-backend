@@ -890,7 +890,6 @@ export async function setPhoneNumberController(
 			});
 		}
 		await sendVerificationSMS(phoneNumber, otp);
-		logger.warn("OTP for phone verification:", { otp });
 
 		return res.status(200).json({
 			message:

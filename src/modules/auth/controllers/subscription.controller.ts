@@ -3,6 +3,7 @@ import * as z from "zod";
 import type { buySubscriptionSchema } from "../../../libs/zod/subscription.zodschema.js";
 import jwt, { type JwtPayload } from "jsonwebtoken";
 import { config } from "../../../configs/app.config.js";
+import crypto from "crypto";
 import {
 	createRazorpayOrder,
 	verifyRazorpaySignature,
@@ -417,12 +418,32 @@ export const razorpayWebhookHandler = async (
 	next: NextFunction,
 ) => {
 	try {
-		const secret = req.body.secret;
-		if (!secret) {
+		const signature = req.headers["x-razorpay-signature"] as string | undefined;
+		if (!signature) {
 			return res
 				.status(401)
-				.json(standardResponse(false, "Unauthorized: Missing webhook secret"));
+				.json(standardResponse(false, "Unauthorized: Missing webhook signature"));
 		}
+
+		const rawBody = JSON.stringify(req.body);
+		const expectedSignature = crypto
+			.createHmac("sha256", config.RAZORPAY_KEY_SECRET)
+			.update(rawBody)
+			.digest("hex");
+
+		const isValid =
+			expectedSignature.length === signature.length &&
+			crypto.timingSafeEqual(
+				Buffer.from(expectedSignature, "hex"),
+				Buffer.from(signature, "hex"),
+			);
+
+		if (!isValid) {
+			return res
+				.status(401)
+				.json(standardResponse(false, "Unauthorized: Invalid webhook signature"));
+		}
+
 		return res.status(200).json(standardResponse(true, "Webhook received"));
 	} catch (error) {
 		next(error);
