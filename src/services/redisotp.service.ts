@@ -52,8 +52,6 @@ export const otpService = {
 			createdAt: Date.now(),
 			expiresAt: Date.now() + ttl * 1000,
 		};
-  // amazonq-ignore-next-line
-		logger.warn(`Storing OTP with key :: ${key}`);
 		// Store in Redis with TTL
 		await redisClient.setex(key, ttl, JSON.stringify(data));
 		return { success: true };
@@ -73,8 +71,6 @@ export const otpService = {
 		keyPrefix: string = "otp:",
 	): Promise<{ success: boolean; message: string; userId?: string; newValue?: string }> {
 		const key = `${keyPrefix}${email.toLowerCase()}:${purpose}`;
-  // amazonq-ignore-next-line
-		logger.warn(`Verifying OTP for key :: ${key}`);
 		const rawData = await redisClient.get(key);
 		if (!rawData) {
 			return { success: false, message: "OTP not found or expired" };
