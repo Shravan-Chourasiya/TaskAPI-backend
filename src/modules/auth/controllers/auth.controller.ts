@@ -942,6 +942,79 @@ export async function verifyPhoneController(
 	}
 }
 
+export async function forgotPasswordResetController(
+	req: Request,
+	res: Response,
+	next: NextFunction,
+	userModel: Model<UserDocument, UserStaticMethods>,
+	sessionModel: SessionStaticMethods,
+) {
+	try {
+		const { userId, userEmail, newPassword } = req.body;
+		if (!userId || !userEmail || !newPassword) {
+			return res.status(400).json({ message: "userId, userEmail and newPassword are required!" });
+		}
+		const user: UserDocument | null = await userModel
+			.findOne({ _id: userId, email: userEmail })
+			.select("+passwordHash");
+		if (!user) {
+			return res.status(404).json({ message: "User Not Found!" });
+		}
+		const newPasswordHash = await bcrypt.hash(newPassword, 12);
+		const isSameAsOldPassword = await user.isPasswordReused(newPasswordHash);
+		if (isSameAsOldPassword) {
+			return res.status(400).json({ message: "New password cannot be same as last password!" });
+		}
+		user.passwordHash = newPasswordHash;
+		await sessionModel.revokeAllUserSessions(user._id.toString(), "Forgot Password Reset");
+		await user.save();
+		return res.status(200).json({ message: "Password reset successfully! You can now login." });
+	} catch (error) {
+		next(error);
+	}
+}
+
+export async function forgotPasswordLoginController(
+	req: Request,
+	res: Response,
+	next: NextFunction,
+	userModel: Model<UserDocument, UserStaticMethods>,
+	sessionModel: SessionStaticMethods,
+) {
+	try {
+		const { userId, userEmail } = req.body;
+		if (!userId || !userEmail) {
+			return res.status(400).json({ message: "userId and userEmail are required!" });
+		}
+		const user: UserDocument | null = await userModel.findOne({ _id: userId, email: userEmail });
+		if (!user) {
+			return res.status(404).json({ message: "User Not Found!" });
+		}
+		if (user.isDeleted) {
+			return res.status(403).json({ message: "Account scheduled for deletion. Cannot login." });
+		}
+		if (user.is2FAEnabled) {
+			const devId = req.cookies.devid || uuidv4();
+			const tempToken = jwt.sign(
+				{ id: user._id, type: "temp" },
+				config.TEMP_TOKEN_JWT_SECRET,
+				{ expiresIn: "10m" },
+			);
+			res.cookie("devid", devId, { httpOnly: true, secure: true, sameSite: "none", maxAge: 600000 });
+			res.cookie("tempToken", tempToken, { httpOnly: true, secure: true, sameSite: "none", maxAge: 600000 });
+			return res.status(200).json({
+				success: true,
+				twoFARequired: true,
+				message: "Enter your 2FA code to complete login",
+			});
+		}
+		const devId = req.cookies.devid || uuidv4();
+		return issueTokensAndCreateSession(req, res, next, sessionModel, user, devId);
+	} catch (error) {
+		next(error);
+	}
+}
+
 export async function forgotPasswordEmailController(
 	req: Request,
 	res: Response,

@@ -17,6 +17,7 @@ import {
 	totpSchema,
 	phoneNumberSchema,
 	phoneVerificationSchema,
+	forgotPasswordUpdateSchema,
 } from "../libs/zod/auth.zodschema.js";
 import {
 	authRateLimiter,
@@ -114,6 +115,21 @@ export function createAuthRouter({
 		ZodValidatorMiddleware(emailSchema),
 		(req, res, next) =>
 			authControllers.forgotPasswordEmailController(req, res, next, userModel),
+	);
+
+	router.post(
+		"/password/forgot/reset",
+		authRateLimiter,
+		ZodValidatorMiddleware(forgotPasswordUpdateSchema),
+		(req, res, next) =>
+			authControllers.forgotPasswordResetController(req, res, next, userModel, sessionModel),
+	);
+
+	router.post(
+		"/password/forgot/login",
+		authRateLimiter,
+		(req, res, next) =>
+			authControllers.forgotPasswordLoginController(req, res, next, userModel, sessionModel),
 	);
 
 	// ── Account ────────────────────────────────────────────────────────────────
